@@ -3,34 +3,34 @@ name: Volleyball Load Monitoring
 overview: "Vollständiger Implementierungsplan für die \"Cycle-Aware Load Monitoring\"-App: Full-Stack-Webapplikation mit React-Frontend, FastAPI-Backend, PostgreSQL-Datenbank, ML-Pipeline und Trainer-Dashboard."
 todos:
   - id: phase0
-    content: "Phase 0: Projekt-Setup (Struktur, Docker, Grundgerüste Backend + Frontend, README)"
+    content: "Phase 1: Projekt-Setup (Struktur, Docker, Grundgerüste Backend + Frontend, README)"
     status: in_progress
   - id: phase1
-    content: "Phase 1: Datenbankmodell und Migrationen (SQLAlchemy Models, Alembic)"
+    content: "Phase 2: Datenbankmodell und Migrationen (SQLAlchemy Models, Alembic)"
     status: pending
   - id: phase2
-    content: "Phase 2: Authentifizierung und Benutzerverwaltung (JWT, Rollen, Tests)"
+    content: "Phase 3: Authentifizierung und Benutzerverwaltung (JWT, Rollen, Tests)"
     status: pending
   - id: phase3
-    content: "Phase 3: Core API-Endpoints CRUD (Wellness, Zyklus, Training, Injury, Privacy + Tests)"
+    content: "Phase 4: Core API-Endpoints CRUD (Wellness, Zyklus, Training, Injury, Privacy + Tests)"
     status: pending
   - id: phase4
-    content: "Phase 4: Synthetische Datengenerierung (realistische korrelierte Daten, Seed-Script)"
+    content: "Phase 5: Synthetische Datengenerierung (realistische korrelierte Daten, Seed-Script)"
     status: pending
   - id: phase5
-    content: "Phase 5: Feature Engineering und ML-Pipeline (ACWR, Random Forest, Prediction-API)"
+    content: "Phase 6: Feature Engineering und ML-Pipeline (ACWR, Random Forest, Prediction-API)"
     status: pending
   - id: phase6
-    content: "Phase 6: Frontend Spielerinnen-App (Wellness-Check, Zyklus, Dashboard, Privacy-Settings)"
+    content: "Phase 7: Frontend Spielerinnen-App (Wellness-Check, Zyklus, Dashboard, Privacy-Settings)"
     status: pending
   - id: phase7
-    content: "Phase 7: Frontend Trainer-Dashboard (Team-Übersicht, Ampelsystem, Detailansicht)"
+    content: "Phase 8: Frontend Trainer-Dashboard (Team-Übersicht, Ampelsystem, Detailansicht)"
     status: pending
   - id: phase8
-    content: "Phase 8: Integration, Docker und Deployment (Dockerfiles, docker-compose, E2E-Test)"
+    content: "Phase 9: Integration, Docker und Deployment (Dockerfiles, docker-compose, E2E-Test)"
     status: pending
   - id: phase9
-    content: "Phase 9: Qualitätssicherung und Feinschliff (Linter, Tests, Security, UI-Polish)"
+    content: "Phase 10: Qualitätssicherung und Feinschliff (Linter, Tests, Security, UI-Polish)"
     status: pending
 isProject: false
 ---

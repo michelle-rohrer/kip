@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 
 app = FastAPI(
-    title="kip API",
+    title="cycle-aware-load-monitoring API",
     description="Cycle-aware load monitoring backend.",
     version="0.1.0",
 )

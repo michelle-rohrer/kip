@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: kip_db
+    container_name: calm_db
     restart: unless-stopped
     env_file:
       - .env
@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kip} -d ${POSTGRES_DB:-kip}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-calm} -d ${POSTGRES_DB:-calm}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -18,7 +18,7 @@ services:
   backend:
     build:
       context: ./backend
-    container_name: kip_backend
+    container_name: calm_backend
     restart: unless-stopped
     env_file:
       - .env
@@ -33,7 +33,7 @@ services:
   frontend:
     build:
       context: ./frontend
-    container_name: kip_frontend
+    container_name: calm_frontend
     restart: unless-stopped
     env_file:
       - .env

@@ -1,4 +1,4 @@
-# kip – Cycle-Aware Load Monitoring
+# cycle-aware-load-monitoring – Cycle-Aware Load Monitoring
 
 Monorepo für ein Full-Stack-Projekt zur zyklusbewussten Belastungssteuerung im Volleyball:
 - **Backend:** FastAPI (Python)
@@ -9,7 +9,7 @@ Monorepo für ein Full-Stack-Projekt zur zyklusbewussten Belastungssteuerung im 
 ## Projektstruktur
 
 ```text
-kip/
+cycle-aware-load-monitoring/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py

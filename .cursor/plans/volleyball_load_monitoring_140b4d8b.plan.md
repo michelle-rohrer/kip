@@ -7,7 +7,7 @@ todos:
     status: in_progress
   - id: phase1
     content: "Phase 2: Datenbankmodell und Migrationen (SQLAlchemy Models, Alembic)"
-    status: pending
+    status: completed
   - id: phase2
     content: "Phase 3: Authentifizierung und Benutzerverwaltung (JWT, Rollen, Tests)"
     status: pending

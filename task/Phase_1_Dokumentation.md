@@ -1,8 +1,8 @@
-# Phase 0 – Projekt-Setup Dokumentation
+# Phase 1 – Projekt-Setup Dokumentation
 
 Dieses Dokument beschreibt, welche Arbeiten in Phase 0 umgesetzt wurden und welchem Zweck sie dienen.
 
-## 0.1 Projektstruktur (Monorepo) anlegen
+## 1.1 Projektstruktur (Monorepo) anlegen
 
 ### Was wurde gemacht?
 - Basisstruktur für `backend`, `frontend`, `data`, Root-Konfigurationen und Startdateien wurde angelegt.
@@ -15,7 +15,7 @@ Dieses Dokument beschreibt, welche Arbeiten in Phase 0 umgesetzt wurden und welc
 - Klare Trennung von Verantwortlichkeiten (API, UI, Daten/ML).
 - Grundlage für spätere Erweiterungen in den folgenden Phasen.
 
-## 0.2 `.gitignore` erstellen
+## 1.2 `.gitignore` erstellen
 
 ### Was wurde gemacht?
 - Datei `.gitignore` erstellt mit Einträgen für:
@@ -29,7 +29,7 @@ Dieses Dokument beschreibt, welche Arbeiten in Phase 0 umgesetzt wurden und welc
 - Verhindert, dass temporäre/maschinengenerierte Dateien ins Repo gelangen.
 - Verhindert das versehentliche Committen sensibler Umgebungsdaten.
 
-## 0.3 `docker-compose.yml` mit Services
+## 1.3 `docker-compose.yml` mit Services
 
 ### Was wurde gemacht?
 - `docker-compose.yml` mit folgenden Services erstellt:
@@ -43,7 +43,7 @@ Dieses Dokument beschreibt, welche Arbeiten in Phase 0 umgesetzt wurden und welc
 - Reproduzierbare Entwicklungsumgebung für alle Beteiligten.
 - Stabile Reihenfolge beim Start (DB -> Backend -> Frontend).
 
-## 0.4 Backend-Grundgerüst (FastAPI)
+## 1.4 Backend-Grundgerüst (FastAPI)
 
 ### Was wurde gemacht?
 - `backend/app/main.py` erstellt mit FastAPI-App und Health-Check Endpoint:
@@ -59,7 +59,7 @@ Dieses Dokument beschreibt, welche Arbeiten in Phase 0 umgesetzt wurden und welc
 - Health-Check als einfacher Betriebsindikator.
 - Vorbereitung für Auth, Datenbank, ML und API-Router in späteren Phasen.
 
-## 0.5 Frontend-Grundgerüst (Vite + React + TS + Tailwind)
+## 1.5 Frontend-Grundgerüst (Vite + React + TS + Tailwind)
 
 ### Was wurde gemacht?
 - Frontend-Basisdateien erstellt:
@@ -77,7 +77,7 @@ Dieses Dokument beschreibt, welche Arbeiten in Phase 0 umgesetzt wurden und welc
 - Tailwind CSS für konsistentes und schnelles UI-Styling.
 - Docker-Startfähigkeit analog zum Backend.
 
-## 0.6 README mit Setup-Anleitung
+## 1.6 README mit Setup-Anleitung
 
 ### Was wurde gemacht?
 - `README.md` erweitert mit:

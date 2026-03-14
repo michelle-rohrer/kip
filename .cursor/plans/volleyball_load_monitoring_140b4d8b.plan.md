@@ -1,16 +1,16 @@
 ---
 name: Volleyball Load Monitoring
-overview: "Vollständiger Implementierungsplan für die \"Cycle-Aware Load Monitoring\"-App: Full-Stack-Webapplikation mit React-Frontend, FastAPI-Backend, PostgreSQL-Datenbank, ML-Pipeline und Trainer-Dashboard."
+overview: "Vollständiger Implementierungsplan für die \"Cycle-Aware Load Monitoring\"-App: Full-Stack-Mobile-Lösung mit React-Native-Apps (Spielerin + Trainerin), FastAPI-Backend, PostgreSQL-Datenbank und präziser ML-Pipeline."
 todos:
   - id: phase0
-    content: "Phase 1: Projekt-Setup (Struktur, Docker, Grundgerüste Backend + Frontend, README)"
+    content: "Phase 1: Projekt-Setup (Struktur, Docker, Grundgerüste Backend + Mobile Apps, README)"
     status: in_progress
   - id: phase1
     content: "Phase 2: Datenbankmodell und Migrationen (SQLAlchemy Models, Alembic)"
     status: completed
   - id: phase2
     content: "Phase 3: Authentifizierung und Benutzerverwaltung (JWT, Rollen, Tests)"
-    status: pending
+    status: completed
   - id: phase3
     content: "Phase 4: Core API-Endpoints CRUD (Wellness, Zyklus, Training, Injury, Privacy + Tests)"
     status: pending
@@ -21,10 +21,10 @@ todos:
     content: "Phase 6: Feature Engineering und ML-Pipeline (ACWR, Random Forest, Prediction-API)"
     status: pending
   - id: phase6
-    content: "Phase 7: Frontend Spielerinnen-App (Wellness-Check, Zyklus, Dashboard, Privacy-Settings)"
+    content: "Phase 7: Mobile Spielerinnen-App (Wellness-Check, Zyklus, Dashboard, Privacy-Settings)"
     status: pending
   - id: phase7
-    content: "Phase 8: Frontend Trainer-Dashboard (Team-Übersicht, Ampelsystem, Detailansicht)"
+    content: "Phase 8: Mobile Trainerinnen-App (Team-Übersicht, Ampelsystem, Detailansicht)"
     status: pending
   - id: phase8
     content: "Phase 9: Integration, Docker und Deployment (Dockerfiles, docker-compose, E2E-Test)"
@@ -41,9 +41,9 @@ isProject: false
 
 ```mermaid
 graph TB
-  subgraph frontend [Frontend - React / Vite / Tailwind]
+  subgraph mobile [Mobile - React Native / Expo / TypeScript]
     PlayerApp[Spielerinnen-App]
-    TrainerDash[Trainer-Dashboard]
+    CoachApp[Trainerinnen-App]
   end
 
   subgraph backend [Backend - FastAPI / Python]
@@ -64,7 +64,7 @@ graph TB
   end
 
   PlayerApp -->|HTTP| API
-  TrainerDash -->|HTTP| API
+  CoachApp -->|HTTP| API
   API --> Auth
   API --> Privacy
   API --> DB
@@ -96,10 +96,14 @@ graph TB
   │   ├── tests/
   │   ├── requirements.txt
   │   └── Dockerfile
-  ├── frontend/
-  │   ├── src/
+  ├── mobile-player/
+  │   ├── app/
   │   ├── package.json
-  │   └── Dockerfile
+  │   └── app.json
+  ├── mobile-coach/
+  │   ├── app/
+  │   ├── package.json
+  │   └── app.json
   ├── data/
   │   └── synthetic/
   ├── docker-compose.yml
@@ -111,9 +115,9 @@ graph TB
 ```
 
 - **0.2** `.gitignore` erstellen (Python, Node, .env, **pycache**, node_modules, .venv)
-- **0.3** `docker-compose.yml` mit Services: `db` (PostgreSQL), `backend` (FastAPI), `frontend` (React)
+- **0.3** `docker-compose.yml` mit Services: `db` (PostgreSQL), `backend` (FastAPI)
 - **0.4** Backend-Grundgerüst: FastAPI-App mit Health-Check-Endpoint, `requirements.txt` (fastapi, uvicorn, sqlalchemy, alembic, psycopg2-binary, pydantic, python-jose, passlib, bcrypt, scikit-learn, pandas, numpy)
-- **0.5** Frontend-Grundgerüst: Vite + React + TypeScript + Tailwind CSS initialisieren
+- **0.5** Mobile-Grundgerüst: React Native + Expo + TypeScript initialisieren (`mobile-player/`, `mobile-coach/`)
 - **0.6** README.md mit Setup-Anleitung (Docker Compose), Projektbeschreibung, Tech-Stack
 
 ---
@@ -128,9 +132,11 @@ graph TB
   - `TrainingEntry` (id, player_id, date, duration_min, intensity, jump_count, sprint_times, strength_values, match_stats)
   - `InjuryEntry` (id, player_id, date, body_location, pain_intensity, is_chronic, description)
   - `PrivacyConsent` (id, player_id, coach_id, share_cycle_data, share_wellness_data, created_at, updated_at)
+  - `PushDevice` (id, user_id, device_token, platform [ios/android], is_active, last_seen_at)
   - `RiskPrediction` (id, player_id, date, risk_score, risk_level [green/yellow/red], model_version, features_used)
 - **1.2** Alembic einrichten und initiale Migration erstellen
 - **1.3** Datenbank-Session und Dependency Injection in FastAPI konfigurieren
+- **1.4** Begriffskonsistenz festlegen: API-Rollen als `player/coach`, UI-Texte als "Spielerin/Trainerin"
 
 ---
 
@@ -141,10 +147,13 @@ graph TB
 - **2.3** API-Routen (`backend/app/routers/auth.py`):
   - `POST /api/auth/register` – Registrierung (Spielerin oder Trainerin)
   - `POST /api/auth/login` – Login, gibt JWT zurück
+  - `POST /api/auth/refresh` – Erneuert Access-Token via Refresh-Token
+  - `POST /api/auth/logout` – Invalidiert Refresh-Token / Session
   - `GET /api/auth/me` – Aktueller User
 - **2.4** Middleware / Dependency: `get_current_user` zur JWT-Validierung
 - **2.5** Rollenbasierte Zugriffskontrolle: Decorator/Dependency `require_role("coach")` bzw. `require_role("player")`
-- **2.6** Tests: Registrierung, Login, ungültiger Token, Rollenbeschränkungen
+- **2.6** Mobile Security: Token-Handling für Apps (Access-Token kurzlebig, Refresh-Token; Speicherung im Secure Store/Keychain)
+- **2.7** Tests: Registrierung, Login, Refresh, Logout, ungültiger Token, Rollenbeschränkungen
 
 ---
 
@@ -195,7 +204,7 @@ graph TB
 
 ---
 
-## Phase 5: Feature Engineering und ML-Pipeline
+## Phase 5: Feature Engineering und ML-Pipeline (präzise Modelldefinition)
 
 - **5.1** Feature-Engineering-Modul (`backend/app/ml/features.py`):
   - **ACWR** (Acute:Chronic Workload Ratio) – 7-Tage vs. 28-Tage rolling average
@@ -204,26 +213,32 @@ graph TB
   - **Deltas** (Veränderungen gegenüber Vortag)
   - **Interaktionsfeatures**: Zyklusphase x Trainingsintensität, Schlaf x mentale Energie
   - **Aggregierte Symptom-Scores**
-- **5.2** Training-Pipeline (`backend/app/ml/train.py`):
+- **5.2** Zielvariable und Labeling (`backend/app/ml/labeling.py`):
+  - Primärziel: Binary Classification `overload_risk_3d` (Risiko in den nächsten 3 Tagen)
+  - Label-Regeln dokumentieren: hohe subjektive Belastung, Lastsprung (ACWR), trainingsrelevante Beschwerde
+  - Leakage-Checks: Nur Informationen bis Zeitpunkt `t` verwenden
+- **5.3** Training-Pipeline (`backend/app/ml/train.py`):
   - Daten aus DB laden und Features berechnen
-  - Train/Test-Split (zeitbasiert, nicht zufällig!)
-  - Random Forest Classifier für Risiko-Level (green/yellow/red)
-  - Metriken loggen (Accuracy, F1, Confusion Matrix)
+  - Zeitbasierte Validierung (Walk-Forward), kein zufälliger Split
+  - Modellvergleich: Regelbasiert (ACWR), Logistische Regression, Random Forest/Gradient Boosting
+  - Metriken loggen: PR-AUC, Recall, ROC-AUC, F1, Brier Score
   - Modell serialisieren (joblib) nach `backend/app/ml/models/`
-- **5.3** Prediction-Service (`backend/app/ml/predict.py`):
+- **5.4** Prediction-Service (`backend/app/ml/predict.py`):
   - Modell laden
   - Aktuelle Features für eine Spielerin berechnen
-  - Risiko-Score und Risiko-Level zurückgeben
-- **5.4** API-Endpoint: `GET /api/predictions/{player_id}` – Aktuelle Vorhersage
-- **5.5** API-Endpoint: `GET /api/predictions/team` – Alle Spielerinnen (für Dashboard)
-- **5.6** Tests: Feature-Berechnung (ACWR korrekt?), Prediction-Format
+  - Wahrscheinlichkeit `p(risk)` und Risiko-Level zurückgeben
+  - Ampellogik: Grün `<0.35`, Gelb `0.35-0.64`, Rot `>=0.65`
+- **5.5** API-Endpoint: `GET /api/predictions/{player_id}` – Aktuelle Vorhersage
+- **5.6** API-Endpoint: `GET /api/predictions/team` – Alle Spielerinnen (für Trainerinnen-App)
+- **5.7** Explainability: Feature Importance + optionale SHAP-Werte für Coach-Feedback
+- **5.8** Tests: Feature-Berechnung (ACWR korrekt?), Labeling-Regeln, Prediction-Format, Schwellen-Mapping
 
 ---
 
-## Phase 6: Frontend – Spielerinnen-App
+## Phase 6: Mobile – Spielerinnen-App
 
-- **6.1** Routing einrichten (React Router): Login, Dashboard, Wellness-Check, Zyklus, Verletzung, Einstellungen
-- **6.2** Auth-Kontext: Login/Logout, JWT im localStorage, Protected Routes
+- **6.1** Navigation einrichten (React Navigation): Login, Dashboard, Wellness-Check, Zyklus, Verletzung, Einstellungen
+- **6.2** Auth-Kontext: Login/Logout, JWT im Secure Store, geschützte Screens
 - **6.3** Login- und Registrierungsseite
 - **6.4** **Wellness-Check-Formular** (Kernseite):
   - Slider/Skalen für alle Werte (1-10)
@@ -245,16 +260,17 @@ graph TB
 - **6.8** **Datenschutz-Einstellungen**:
   - Toggles: Zyklusdaten teilen (ja/nein), Wellnessdaten teilen (ja/nein)
 - **6.9** API-Service-Layer mit fetch/axios und JWT-Header
+- **6.10** Push-Reminder für Daily Check-in (optional im MVP, fix im Post-MVP)
 
 ---
 
-## Phase 7: Frontend – Trainer-Dashboard
+## Phase 7: Mobile – Trainerinnen-App
 
 - **7.1** **Team-Übersicht**:
   - Liste aller Spielerinnen mit Ampel-Icon (Grün/Gelb/Rot)
   - Sortierbar nach Risiko-Score
 - **7.2** **Spielerinnen-Detailansicht**:
-  - Wellness-Verlauf (Liniendiagramm, z.B. mit Recharts)
+  - Wellness-Verlauf (Liniendiagramm, z. B. mit victory-native)
   - Trainingsbelastung-Verlauf
   - Zyklusdaten (nur wenn freigegeben, sonst Hinweis "nicht freigegeben")
   - Verletzungshistorie
@@ -267,19 +283,19 @@ graph TB
 ## Phase 8: Integration, Docker und Deployment
 
 - **8.1** `Dockerfile` Backend (Python, uvicorn)
-- **8.2** `Dockerfile` Frontend (Node Build + nginx)
-- **8.3** `docker-compose.yml` finalisieren (DB, Backend, Frontend, Volumes, Networks)
+- **8.2** Build-Profile für mobile Apps (Expo EAS / lokale Builds) dokumentieren
+- **8.3** `docker-compose.yml` finalisieren (DB, Backend, Volumes, Networks)
 - **8.4** `.env.example` mit allen benötigten Umgebungsvariablen (DB-URL, JWT-Secret, etc.)
-- **8.5** End-to-End-Test: Kompletter Flow (Registrieren -> Login -> Wellness eintragen -> Dashboard prüfen)
+- **8.5** End-to-End-Test: Kompletter Flow (Registrieren -> Login -> Wellness eintragen -> Risiko prüfen)
 - **8.6** README.md finalisieren: Setup mit einem Befehl (`docker compose up`), Screenshots, API-Doku
 
 ---
 
 ## Phase 9: Qualitätssicherung und Feinschliff
 
-- **9.1** Linter und Formatter einrichten (Backend: ruff/black, Frontend: ESLint/Prettier)
+- **9.1** Linter und Formatter einrichten (Backend: ruff/black, Mobile: ESLint/Prettier)
 - **9.2** Alle Tests durchlaufen lassen, Coverage prüfen
 - **9.3** Commit-History aufräumen (sinnvolle Messages)
 - **9.4** Sicherheits-Check: Keine Secrets im Code, .env in .gitignore, SQL-Injection-Schutz durch SQLAlchemy
-- **9.5** UI-Feinschliff: Responsive Design, Loading States, Error Handling
+- **9.5** UI-Feinschliff: Mobile UX, Loading States, Error Handling
 

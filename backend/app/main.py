@@ -3,7 +3,14 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.routers import auth_router
+from app.routers import (
+    auth_router,
+    cycle_router,
+    injury_router,
+    privacy_router,
+    training_router,
+    wellness_router,
+)
 
 
 app = FastAPI(
@@ -13,6 +20,11 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(wellness_router)
+app.include_router(cycle_router)
+app.include_router(training_router)
+app.include_router(injury_router)
+app.include_router(privacy_router)
 
 
 @app.get("/health", tags=["system"])

@@ -33,6 +33,10 @@ cycle-aware-load-monitoring/
 └── README.md
 ```
 
+## Projektdokumentation
+
+- **Umsetzung Core API (Wellness, Zyklus, Training, Verletzung, Privacy, Tests):** [docs/UMSETZUNG-CORE-API-CRUD.md](docs/UMSETZUNG-CORE-API-CRUD.md)
+
 ## Voraussetzungen
 
 - Docker + Docker Compose

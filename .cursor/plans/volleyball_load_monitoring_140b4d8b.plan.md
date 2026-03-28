@@ -13,7 +13,7 @@ todos:
     status: completed
   - id: phase3
     content: "Phase 4: Core API-Endpoints CRUD (Wellness, Zyklus, Training, Injury, Privacy + Tests)"
-    status: pending
+    status: completed
   - id: phase4
     content: "Phase 5: Synthetische Datengenerierung (realistische korrelierte Daten, Seed-Script)"
     status: pending

@@ -35,7 +35,11 @@ cycle-aware-load-monitoring/
 
 ## Projektdokumentation
 
-- **Umsetzung Core API (Wellness, Zyklus, Training, Verletzung, Privacy, Tests):** [docs/UMSETZUNG-CORE-API-CRUD.md](docs/UMSETZUNG-CORE-API-CRUD.md)
+- **Phase 1 – Projekt-Setup:** [docs/Phase_1_Dokumentation.md](docs/Phase_1_Dokumentation.md)
+- **Phase 2 – Datenbankmodell und Migrationen:** [docs/Phase_2_Dokumentation.md](docs/Phase_2_Dokumentation.md)
+- **Phase 3 – Authentifizierung:** [docs/Phase_3_Dokumentation.md](docs/Phase_3_Dokumentation.md)
+- **Umsetzung Core API (Wellness, Zyklus, Training, Verletzung, Privacy, Tests):** [docs/Phase_4_Dokumentation.md](docs/Phase_4_Dokumentation.md)
+- **Synthetische Datengenerierung und Seed:** [docs/Phase_5_Dokumentation.md](docs/Phase_5_Dokumentation.md)
 
 ## Voraussetzungen
 

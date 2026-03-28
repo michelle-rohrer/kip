@@ -16,7 +16,7 @@ todos:
     status: completed
   - id: phase4
     content: "Phase 5: Synthetische Datengenerierung (realistische korrelierte Daten, Seed-Script)"
-    status: pending
+    status: completed
   - id: phase5
     content: "Phase 6: Feature Engineering und ML-Pipeline (ACWR, Random Forest, Prediction-API)"
     status: pending

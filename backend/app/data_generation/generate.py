@@ -167,32 +167,12 @@ def build_synthetic_dataset(
             daily_intensity.append(intensity)
             daily_duration.append(duration)
 
-            jump = int(player_rng.poisson(intensity * duration / 400.0))
-            sprint_times = {
-                "20m_s": round(float(player_rng.normal(3.2 + (10 - intensity) * 0.05, 0.12)), 2),
-                "10m_s": round(float(player_rng.normal(1.85 + (10 - intensity) * 0.03, 0.08)), 2),
-            }
-            strength_values = {
-                "squat_kg": int(player_rng.integers(40, 95) + intensity * 2),
-                "bench_kg": int(player_rng.integers(25, 55) + intensity),
-            }
-            match_stats = None
-            if player_rng.random() < 0.08:
-                match_stats = {
-                    "sets_played": int(player_rng.integers(2, 6)),
-                    "attack_attempts": int(player_rng.integers(8, 28)),
-                }
-
             training_rows.append(
                 TrainingEntry(
                     player=player,
                     date=d,
                     duration_min=duration,
                     intensity=intensity,
-                    jump_count=max(0, jump),
-                    sprint_times=sprint_times,
-                    strength_values=strength_values,
-                    match_stats=match_stats,
                 )
             )
 

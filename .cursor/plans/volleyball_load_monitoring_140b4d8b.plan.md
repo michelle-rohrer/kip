@@ -19,16 +19,16 @@ todos:
     status: completed
   - id: phase5
     content: "Phase 6: Feature Engineering und ML-Pipeline (ACWR, Random Forest, Prediction-API)"
-    status: pending
+    status: completed
   - id: phase6
     content: "Phase 7: Mobile Spielerinnen-App (Wellness-Check, Zyklus, Dashboard, Privacy-Settings)"
-    status: pending
+    status: completed
   - id: phase7
     content: "Phase 8: Mobile Trainerinnen-App (Team-Übersicht, Ampelsystem, Detailansicht)"
-    status: pending
+    status: completed
   - id: phase8
     content: "Phase 9: Integration, Docker und Deployment (Dockerfiles, docker-compose, E2E-Test)"
-    status: pending
+    status: completed
   - id: phase9
     content: "Phase 10: Qualitätssicherung und Feinschliff (Linter, Tests, Security, UI-Polish)"
     status: pending

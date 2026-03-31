@@ -7,6 +7,7 @@ from app.routers import (
     auth_router,
     cycle_router,
     injury_router,
+    predictions_router,
     privacy_router,
     training_router,
     wellness_router,
@@ -25,6 +26,7 @@ app.include_router(cycle_router)
 app.include_router(training_router)
 app.include_router(injury_router)
 app.include_router(privacy_router)
+app.include_router(predictions_router)
 
 
 @app.get("/health", tags=["system"])

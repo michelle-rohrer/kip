@@ -79,7 +79,6 @@ Abhängigkeiten: bestehende SQLAlchemy-Modelle (`app.models`), `hash_password` a
 - **Sonntag:** kein Training (kein `TrainingEntry`).
 - **Montag–Samstag:** eine Einheit pro Tag mit **Dauer** und **Intensität** (1–10).
 - **Periodisierung:** in etwa **3-Wochen-Blöcken** wechseln **Belastungswochen** (höhere Intensität/Dauer) und **Erholungswochen** (niedrigere Werte).
-- Zusatzfelder: **`jump_count`** (poissonartig aus Last abgeleitet), **`sprint_times`**, **`strength_values`** als JSON; **`match_stats`** gelegentlich.
 
 ### Wofür?
 

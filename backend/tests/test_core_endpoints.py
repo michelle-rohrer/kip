@@ -10,6 +10,7 @@ from app.routers import (
     auth_router,
     cycle_router,
     injury_router,
+    predictions_router,
     privacy_router,
     training_router,
     wellness_router,
@@ -26,6 +27,7 @@ def api_client(db_session: Session) -> Generator[TestClient, None, None]:
     app.include_router(training_router)
     app.include_router(injury_router)
     app.include_router(privacy_router)
+    app.include_router(predictions_router)
 
     def override_get_db() -> Generator[Session, None, None]:
         yield db_session
@@ -319,3 +321,90 @@ def test_privacy_upsert_updates(api_client: TestClient, team_and_users: dict) ->
     assert second.json()["id"] == cid
     assert second.json()["share_cycle_data"] is False
     assert second.json()["share_wellness_data"] is True
+
+
+def test_predictions_player_can_read_own_prediction(api_client: TestClient, team_and_users: dict) -> None:
+    p = team_and_users
+    player_headers = {"Authorization": f"Bearer {p['player_token']}"}
+    create_wellness = api_client.post(
+        "/api/wellness/",
+        headers=player_headers,
+        json={
+            "date": "2026-04-10",
+            "sleep_hours": 6.5,
+            "sleep_quality": 5,
+            "muscle_soreness": 7,
+            "mental_energy": 4,
+            "stress_level": 7,
+            "motivation": 6,
+            "rpe_previous_day": 7,
+        },
+    )
+    assert create_wellness.status_code == 201
+
+    create_training = api_client.post(
+        "/api/training/",
+        headers=player_headers,
+        json={"date": "2026-04-10", "duration_min": 100, "intensity": 8},
+    )
+    assert create_training.status_code == 201
+
+    pred = api_client.get(f"/api/predictions/{p['player_id']}", headers=player_headers)
+    assert pred.status_code == 200
+    payload = pred.json()
+    assert payload["player_id"] == p["player_id"]
+    assert 0.0 <= payload["risk_score"] <= 1.0
+    assert payload["risk_level"] in {"green", "yellow", "red"}
+
+
+def test_predictions_player_cannot_read_other_player(api_client: TestClient, db_session: Session) -> None:
+    team = Team(name="Team Pred")
+    db_session.add(team)
+    db_session.commit()
+    db_session.refresh(team)
+
+    p1 = _register(api_client, "pred.p1@example.com", "player", "Pred P1", team.id)
+    p2 = _register(api_client, "pred.p2@example.com", "player", "Pred P2", team.id)
+    token1 = _login(api_client, "pred.p1@example.com")
+
+    res = api_client.get(
+        f"/api/predictions/{p2['id']}",
+        headers={"Authorization": f"Bearer {token1}"},
+    )
+    assert res.status_code == 403
+    assert p1["id"] != p2["id"]
+
+
+def test_predictions_team_for_coach(api_client: TestClient, team_and_users: dict) -> None:
+    p = team_and_users
+    player_headers = {"Authorization": f"Bearer {p['player_token']}"}
+    coach_headers = {"Authorization": f"Bearer {p['coach_token']}"}
+
+    assert (
+        api_client.post(
+            "/api/training/",
+            headers=player_headers,
+            json={"date": "2026-05-01", "duration_min": 75, "intensity": 6},
+        ).status_code
+        == 201
+    )
+    assert (
+        api_client.post(
+            "/api/wellness/",
+            headers=player_headers,
+            json={
+                "date": "2026-05-01",
+                "sleep_hours": 7.2,
+                "sleep_quality": 6,
+                "muscle_soreness": 5,
+                "mental_energy": 6,
+                "stress_level": 4,
+                "motivation": 7,
+            },
+        ).status_code
+        == 201
+    )
+
+    res = api_client.get("/api/predictions/team", headers=coach_headers)
+    assert res.status_code == 200
+    assert len(res.json()) >= 1

@@ -52,6 +52,15 @@ cycle-aware-load-monitoring/
 2. Services starten:
    - `docker compose up --build`
 
+## End-to-End-Test (Backend)
+
+Der E2E-Test deckt den Kern-Flow ab: Registrieren -> Login -> Wellness eintragen -> Risiko-Vorhersage abrufen.
+
+```bash
+cd backend
+pytest tests/test_e2e_flow.py
+```
+
 ## Verfügbare Services
 
 - **Frontend:** `http://localhost:5173`

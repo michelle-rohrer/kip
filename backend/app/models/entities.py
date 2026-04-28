@@ -65,7 +65,9 @@ class User(Base):
         nullable=False,
     )
     team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True)
-    training_uid: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
+    training_uid: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
     player_position: Mapped[str | None] = mapped_column(String(32), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

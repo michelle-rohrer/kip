@@ -95,13 +95,17 @@ def decode_token(token: str, *, expected_type: str | None = None) -> dict:
 
 
 def register_user(db: Session, user_in: UserCreate) -> User:
-    existing_user = db.execute(select(User).where(User.username == user_in.username)).scalar_one_or_none()
+    existing_user = db.execute(
+        select(User).where(User.username == user_in.username)
+    ).scalar_one_or_none()
     if existing_user is not None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered"
         )
     if user_in.email:
-        existing_email = db.execute(select(User).where(User.email == user_in.email)).scalar_one_or_none()
+        existing_email = db.execute(
+            select(User).where(User.email == user_in.email)
+        ).scalar_one_or_none()
         if existing_email is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
@@ -110,9 +114,9 @@ def register_user(db: Session, user_in: UserCreate) -> User:
     team_id = user_in.team_id
     if user_in.role == UserRole.PLAYER and team_id is None:
         preferred_team_names = ("BTV Aarau F1", "Eaglets NNV")
-        preferred_teams = db.execute(
-            select(Team).where(Team.name.in_(preferred_team_names))
-        ).scalars().all()
+        preferred_teams = (
+            db.execute(select(Team).where(Team.name.in_(preferred_team_names))).scalars().all()
+        )
         available_teams = preferred_teams or db.execute(select(Team)).scalars().all()
         if available_teams:
             team_id = secrets.choice(available_teams).id

@@ -190,7 +190,13 @@ def build_player_feature_frame(
 
     # Within-player z-score: normalizes each metric relative to the player's own baseline.
     # Uses expanding window so only past data is used (no leakage).
-    wellness_cols = ["sleep_quality", "muscle_soreness", "mental_energy", "stress_level", "motivation"]
+    wellness_cols = [
+        "sleep_quality",
+        "muscle_soreness",
+        "mental_energy",
+        "stress_level",
+        "motivation",
+    ]
     for col in wellness_cols:
         exp_mean = df[col].expanding(min_periods=5).mean()
         exp_std = df[col].expanding(min_periods=5).std().replace(0, 1.0)

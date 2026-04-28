@@ -93,7 +93,9 @@ def team_and_users(db_session: Session, api_client: TestClient) -> dict:
     db_session.refresh(team)
 
     coach = _create_coach(db_session, username="coach_alpha", name="Coach", team_id=team.id)
-    player = _register(api_client, "player_alpha", "player@example.com", "player", "Player", team.id)
+    player = _register(
+        api_client, "player_alpha", "player@example.com", "player", "Player", team.id
+    )
 
     coach_token = _login(api_client, "coach_alpha")
     player_token = _login(api_client, "player_alpha")
@@ -264,7 +266,9 @@ def test_training_coach_different_team_forbidden(
     db_session.refresh(team_b)
 
     _create_coach(db_session, username="coach_a", name="Coach A", team_id=team_a.id)
-    player_b = _register(api_client, "player_b", "player_b@example.com", "player", "Player B", team_b.id)
+    player_b = _register(
+        api_client, "player_b", "player_b@example.com", "player", "Player B", team_b.id
+    )
 
     player_token = _login(api_client, "player_b")
     coach_token = _login(api_client, "coach_a")

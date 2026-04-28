@@ -51,18 +51,24 @@ def get_team_predictions(
                     "player_position": p.player_position,
                     "latest_training_date": latest_training.date if latest_training else None,
                     "latest_session_rpe": latest_training.session_rpe if latest_training else None,
-                    "latest_session_type": latest_training.session_type if latest_training else None,
+                    "latest_session_type": (
+                        latest_training.session_type if latest_training else None
+                    ),
                     "latest_participation_status": (
                         getattr(latest_training, "participation_status", None)
                         if latest_training
                         else None
                     ),
                     "latest_injury_date": latest_injury.date if latest_injury else None,
-                    "latest_pain_intensity": latest_injury.pain_intensity if latest_injury else None,
+                    "latest_pain_intensity": (
+                        latest_injury.pain_intensity if latest_injury else None
+                    ),
                     "latest_medical_attention": (
                         latest_injury.medical_attention if latest_injury else None
                     ),
-                    "latest_time_loss_days": latest_injury.time_loss_days if latest_injury else None,
+                    "latest_time_loss_days": (
+                        latest_injury.time_loss_days if latest_injury else None
+                    ),
                 }
             )
         )
@@ -99,5 +105,7 @@ def get_player_prediction(
         )
 
     player = db.query(User).filter(User.id == player_id).one_or_none()
-    result = predict_current_risk(db, player_id=player_id, player_position=player.player_position if player else None)
+    result = predict_current_risk(
+        db, player_id=player_id, player_position=player.player_position if player else None
+    )
     return upsert_daily_prediction(db, player_id=player_id, result=result)

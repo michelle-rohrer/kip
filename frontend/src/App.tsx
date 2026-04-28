@@ -333,13 +333,13 @@ function App() {
     try {
       const [wellnessEntries, cycleEntries, trainingEntries, injuryEntries, privacyConsents, risk] =
         await Promise.all([
-        apiRequest<WellnessEntry[]>("/api/wellness/", undefined, accessToken),
-        apiRequest<CycleEntry[]>("/api/cycle/", undefined, accessToken),
-        apiRequest<TrainingEntry[]>("/api/training/", undefined, accessToken),
-        apiRequest<InjuryEntry[]>("/api/injury/", undefined, accessToken),
-        apiRequest<PrivacyConsent[]>("/api/privacy/consent", undefined, accessToken),
-        apiRequest<Prediction>(`/api/predictions/${user.id}`, undefined, accessToken),
-      ]);
+          apiRequest<WellnessEntry[]>("/api/wellness/", undefined, accessToken),
+          apiRequest<CycleEntry[]>("/api/cycle/", undefined, accessToken),
+          apiRequest<TrainingEntry[]>("/api/training/", undefined, accessToken),
+          apiRequest<InjuryEntry[]>("/api/injury/", undefined, accessToken),
+          apiRequest<PrivacyConsent[]>("/api/privacy/consent", undefined, accessToken),
+          apiRequest<Prediction>(`/api/predictions/${user.id}`, undefined, accessToken),
+        ]);
       setWellness(wellnessEntries);
       setCycle(cycleEntries);
       setTraining(trainingEntries);
@@ -519,7 +519,9 @@ function App() {
 
   const coachTrainingAvgDuration = useMemo(() => {
     if (coachTrainingTrend.length === 0) return 0;
-    return coachTrainingTrend.reduce((sum, entry) => sum + entry.duration, 0) / coachTrainingTrend.length;
+    return (
+      coachTrainingTrend.reduce((sum, entry) => sum + entry.duration, 0) / coachTrainingTrend.length
+    );
   }, [coachTrainingTrend]);
 
   const teamRiskAverage = useMemo(() => {
@@ -1627,7 +1629,9 @@ function App() {
                             {tt.medicalAttention}: {entry.medical_attention ? tt.yes : tt.no} -{" "}
                             {tt.timeLossDays}: {entry.time_loss_days}
                           </p>
-                          {entry.description && <p className="text-slate-600">{entry.description}</p>}
+                          {entry.description && (
+                            <p className="text-slate-600">{entry.description}</p>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -1679,7 +1683,10 @@ function App() {
                         step={1}
                         value={trainingForm.intensity}
                         onChange={(event) =>
-                          setTrainingForm((prev) => ({ ...prev, intensity: Number(event.target.value) }))
+                          setTrainingForm((prev) => ({
+                            ...prev,
+                            intensity: Number(event.target.value),
+                          }))
                         }
                       />
                     </label>
@@ -1776,12 +1783,12 @@ function App() {
                       {training.slice(0, 10).map((entry) => (
                         <li key={entry.id} className="rounded bg-slate-50 px-3 py-2">
                           <p className="font-medium">
-                            {entry.date} - {entry.duration_min} min, {tt.intensityLabel} {entry.intensity},{" "}
-                            sRPE {entry.session_rpe ?? "-"}
+                            {entry.date} - {entry.duration_min} min, {tt.intensityLabel}{" "}
+                            {entry.intensity}, sRPE {entry.session_rpe ?? "-"}
                           </p>
                           <p className="text-slate-700">
-                            {tt.sessionType}: {entry.session_type ?? "-"} - {tt.participationStatus}:{" "}
-                            {entry.participation_status ?? "-"}
+                            {tt.sessionType}: {entry.session_type ?? "-"} - {tt.participationStatus}
+                            : {entry.participation_status ?? "-"}
                           </p>
                         </li>
                       ))}
@@ -1799,84 +1806,82 @@ function App() {
                 ) : (
                   <ul className="mt-3 space-y-2">
                     {coachPriorityList.map((item) => (
-                        <li
-                          key={`${item.player_id}-${item.date ?? "today"}`}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded border p-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`h-4 w-4 rounded-full ${riskColor(item.risk_level)}`}
-                            />
-                            <p className="font-medium">
-                              {item.player_name ?? `${t.player} #${item.player_id}`}
-                            </p>
-                            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
-                              {mapPositionLabel(item.player_position, tt)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-sm">
-                            <span>
-                              {(item.risk_score * 100).toFixed(1)}% -{" "}
-                              {item.risk_level.toUpperCase()}
-                            </span>
-                            <button
-                              type="button"
-                              className="rounded bg-slate-800 px-3 py-1 text-white"
-                              onClick={() => {
-                                setSelectedPlayerId(item.player_id ?? null);
-                                setTab("detail");
+                      <li
+                        key={`${item.player_id}-${item.date ?? "today"}`}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded border p-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`h-4 w-4 rounded-full ${riskColor(item.risk_level)}`} />
+                          <p className="font-medium">
+                            {item.player_name ?? `${t.player} #${item.player_id}`}
+                          </p>
+                          <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                            {mapPositionLabel(item.player_position, tt)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm">
+                          <span>
+                            {(item.risk_score * 100).toFixed(1)}% - {item.risk_level.toUpperCase()}
+                          </span>
+                          <button
+                            type="button"
+                            className="rounded bg-slate-800 px-3 py-1 text-white"
+                            onClick={() => {
+                              setSelectedPlayerId(item.player_id ?? null);
+                              setTab("detail");
+                            }}
+                          >
+                            {t.detail}
+                          </button>
+                        </div>
+                        <div className="mt-2 w-full">
+                          <div className="h-2 w-full rounded bg-slate-200">
+                            <div
+                              className={`h-2 rounded ${riskColor(item.risk_level)}`}
+                              style={{
+                                width: `${Math.min(100, Math.max(0, item.risk_score * 100))}%`,
                               }}
-                            >
-                              {t.detail}
-                            </button>
+                            />
                           </div>
-                          <div className="mt-2 w-full">
-                            <div className="h-2 w-full rounded bg-slate-200">
-                              <div
-                                className={`h-2 rounded ${riskColor(item.risk_level)}`}
-                                style={{ width: `${Math.min(100, Math.max(0, item.risk_score * 100))}%` }}
-                              />
-                            </div>
-                            <p className="mt-1 text-xs text-slate-600">
-                              {t.avg}: {(teamRiskAverage * 100).toFixed(1)}%
-                            </p>
-                          </div>
-                          <div className="mt-2 w-full flex flex-wrap gap-2 text-xs">
-                            <span className="rounded bg-blue-50 px-2 py-1 text-blue-800">
-                              sRPE: {item.latest_session_rpe ?? "-"}
-                            </span>
-                            <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-800">
-                              {tt.sessionType}: {mapSessionTypeLabel(item.latest_session_type, tt)}
-                            </span>
-                            <span className="rounded bg-violet-50 px-2 py-1 text-violet-800">
-                              {tt.participationStatus}:{" "}
-                              {mapParticipationLabel(item.latest_participation_status, tt)}
-                            </span>
-                            <span
-                              className={`rounded px-2 py-1 ${
-                                (item.latest_pain_intensity ?? 0) >= 7
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-amber-50 text-amber-800"
-                              }`}
-                            >
-                              {tt.painIntensity}: {item.latest_pain_intensity ?? "-"}
-                            </span>
-                            <span
-                              className={`rounded px-2 py-1 ${
-                                (item.latest_time_loss_days ?? 0) > 0
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-emerald-50 text-emerald-800"
-                              }`}
-                            >
-                              {tt.timeLossDays}: {item.latest_time_loss_days ?? 0}
-                            </span>
-                            <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">
-                              {tt.medicalAttention}:{" "}
-                              {item.latest_medical_attention ? tt.yes : tt.no}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
+                          <p className="mt-1 text-xs text-slate-600">
+                            {t.avg}: {(teamRiskAverage * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                        <div className="mt-2 w-full flex flex-wrap gap-2 text-xs">
+                          <span className="rounded bg-blue-50 px-2 py-1 text-blue-800">
+                            sRPE: {item.latest_session_rpe ?? "-"}
+                          </span>
+                          <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-800">
+                            {tt.sessionType}: {mapSessionTypeLabel(item.latest_session_type, tt)}
+                          </span>
+                          <span className="rounded bg-violet-50 px-2 py-1 text-violet-800">
+                            {tt.participationStatus}:{" "}
+                            {mapParticipationLabel(item.latest_participation_status, tt)}
+                          </span>
+                          <span
+                            className={`rounded px-2 py-1 ${
+                              (item.latest_pain_intensity ?? 0) >= 7
+                                ? "bg-red-100 text-red-800"
+                                : "bg-amber-50 text-amber-800"
+                            }`}
+                          >
+                            {tt.painIntensity}: {item.latest_pain_intensity ?? "-"}
+                          </span>
+                          <span
+                            className={`rounded px-2 py-1 ${
+                              (item.latest_time_loss_days ?? 0) > 0
+                                ? "bg-red-100 text-red-800"
+                                : "bg-emerald-50 text-emerald-800"
+                            }`}
+                          >
+                            {tt.timeLossDays}: {item.latest_time_loss_days ?? 0}
+                          </span>
+                          <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">
+                            {tt.medicalAttention}: {item.latest_medical_attention ? tt.yes : tt.no}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </section>
@@ -1916,7 +1921,10 @@ function App() {
                     <p className="mt-2 text-sm text-slate-600">{t.noWellnessData}</p>
                   ) : (
                     <>
-                      <svg viewBox="0 0 100 100" className="mt-3 h-32 w-full rounded bg-slate-100 p-2">
+                      <svg
+                        viewBox="0 0 100 100"
+                        className="mt-3 h-32 w-full rounded bg-slate-100 p-2"
+                      >
                         <polyline
                           fill="none"
                           stroke="#2563eb"
@@ -1927,13 +1935,17 @@ function App() {
                           fill="none"
                           stroke="#0f766e"
                           strokeWidth="2"
-                          points={formatTrendPoints(coachWellnessTrend.map((point) => point.sleep_quality))}
+                          points={formatTrendPoints(
+                            coachWellnessTrend.map((point) => point.sleep_quality),
+                          )}
                         />
                         <polyline
                           fill="none"
                           stroke="#9333ea"
                           strokeWidth="2"
-                          points={formatTrendPoints(coachWellnessTrend.map((point) => point.mental_energy))}
+                          points={formatTrendPoints(
+                            coachWellnessTrend.map((point) => point.mental_energy),
+                          )}
                         />
                       </svg>
                       <p className="mt-2 text-xs text-slate-600">
@@ -1949,18 +1961,25 @@ function App() {
                     <p className="mt-2 text-sm text-slate-600">{t.noTrainingData}</p>
                   ) : (
                     <>
-                      <svg viewBox="0 0 100 100" className="mt-3 h-32 w-full rounded bg-slate-100 p-2">
+                      <svg
+                        viewBox="0 0 100 100"
+                        className="mt-3 h-32 w-full rounded bg-slate-100 p-2"
+                      >
                         <polyline
                           fill="none"
                           stroke="#0f766e"
                           strokeWidth="2.5"
-                          points={formatTrendPoints(coachTrainingTrend.map((point) => point.duration))}
+                          points={formatTrendPoints(
+                            coachTrainingTrend.map((point) => point.duration),
+                          )}
                         />
                         <polyline
                           fill="none"
                           stroke="#ea580c"
                           strokeWidth="2"
-                          points={formatTrendPoints(coachTrainingTrend.map((point) => point.intensity))}
+                          points={formatTrendPoints(
+                            coachTrainingTrend.map((point) => point.intensity),
+                          )}
                         />
                       </svg>
                       <p className="mt-2 text-sm text-slate-700">

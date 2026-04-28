@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies import get_current_user, require_role
+from app.ml.train import load_training_status
 from app.ml.predict import predict_current_risk, upsert_daily_prediction
 from app.models import User, UserRole
-from app.schemas.predictions import RiskPredictionResponse
+from app.schemas.predictions import ModelTrainingStatusResponse, RiskPredictionResponse
 from app.services.privacy import assert_coach_can_view_training, get_player_or_404
 
 router = APIRouter(prefix="/api/predictions", tags=["predictions"])
@@ -31,6 +32,18 @@ def get_team_predictions(
         result = predict_current_risk(db, player_id=p.id)
         out.append(upsert_daily_prediction(db, player_id=p.id, result=result))
     return out
+
+
+@router.get("/model-status", response_model=ModelTrainingStatusResponse)
+def get_model_training_status(current_user: User = Depends(get_current_user)):
+    _ = current_user  # endpoint requires authenticated access
+    status_payload = load_training_status()
+    if status_payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No model training status available yet",
+        )
+    return ModelTrainingStatusResponse(**status_payload)
 
 
 @router.get("/{player_id}", response_model=RiskPredictionResponse)

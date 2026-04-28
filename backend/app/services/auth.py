@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.models import User
 from app.schemas import UserCreate
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")
+JWT_DEFAULT_SECRET = "dev-secret-change-me"
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", JWT_DEFAULT_SECRET)
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
@@ -22,6 +23,12 @@ _active_refresh_jtis_by_user: dict[int, set[str]] = {}
 
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def is_jwt_secret_secure(secret: str) -> bool:
+    if secret in {JWT_DEFAULT_SECRET, "change-me-in-production", "changeme", "secret"}:
+        return False
+    return len(secret.strip()) >= 32
 
 
 def hash_password(password: str) -> str:

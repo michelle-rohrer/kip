@@ -13,3 +13,5 @@ pandas
 numpy
 pytest
 httpx
+ruff
+black

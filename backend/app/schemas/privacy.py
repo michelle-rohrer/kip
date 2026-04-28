@@ -13,6 +13,7 @@ class PrivacyConsentResponse(BaseModel):
     id: int
     player_id: int
     coach_id: int
+    coach_name: str | None = None
     share_cycle_data: bool
     share_wellness_data: bool
     created_at: datetime

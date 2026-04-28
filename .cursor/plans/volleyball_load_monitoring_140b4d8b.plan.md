@@ -4,7 +4,7 @@ overview: "Vollständiger Implementierungsplan für die \"Cycle-Aware Load Monit
 todos:
   - id: phase0
     content: "Phase 1: Projekt-Setup (Struktur, Docker, Grundgerüste Backend + Mobile Apps, README)"
-    status: in_progress
+    status: completed
   - id: phase1
     content: "Phase 2: Datenbankmodell und Migrationen (SQLAlchemy Models, Alembic)"
     status: completed
@@ -31,7 +31,7 @@ todos:
     status: completed
   - id: phase9
     content: "Phase 10: Qualitätssicherung und Feinschliff (Linter, Tests, Security, UI-Polish)"
-    status: pending
+    status: in_progress
 isProject: false
 ---
 

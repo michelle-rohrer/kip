@@ -25,6 +25,10 @@ class RiskLevel(str, enum.Enum):
     RED = "red"
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    return [item.value for item in enum_cls]
+
+
 class Team(Base):
     __tablename__ = "teams"
 
@@ -41,7 +45,10 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role", values_callable=enum_values),
+        nullable=False,
+    )
     team_id: Mapped[int | None] = mapped_column(ForeignKey("teams.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
@@ -72,7 +79,10 @@ class CycleEntry(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     cycle_day: Mapped[int] = mapped_column(Integer, nullable=False)
-    phase: Mapped[CyclePhase] = mapped_column(Enum(CyclePhase, name="cycle_phase"), nullable=False)
+    phase: Mapped[CyclePhase] = mapped_column(
+        Enum(CyclePhase, name="cycle_phase", values_callable=enum_values),
+        nullable=False,
+    )
     cycle_length: Mapped[int] = mapped_column(Integer, nullable=False)
     pms_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cramps: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -161,7 +171,10 @@ class RiskPrediction(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     risk_score: Mapped[float] = mapped_column(Float, nullable=False)
-    risk_level: Mapped[RiskLevel] = mapped_column(Enum(RiskLevel, name="risk_level"), nullable=False)
+    risk_level: Mapped[RiskLevel] = mapped_column(
+        Enum(RiskLevel, name="risk_level", values_callable=enum_values),
+        nullable=False,
+    )
     model_version: Mapped[str] = mapped_column(String(64), nullable=False)
     features_used: Mapped[dict] = mapped_column(JSON, nullable=False)
 

@@ -1,0 +1,34 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy:
+    name: Trigger staging deploy hooks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger backend staging deploy
+        if: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK_URL != '' }}
+        env:
+          HOOK_URL: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$HOOK_URL"
+
+      - name: Trigger frontend staging deploy
+        if: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK_URL != '' }}
+        env:
+          HOOK_URL: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$HOOK_URL"
+
+      - name: Verify deployment hooks configured
+        env:
+          BACKEND_HOOK: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK_URL }}
+          FRONTEND_HOOK: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$BACKEND_HOOK" ] || [ -z "$FRONTEND_HOOK" ]; then
+            echo "Missing staging deploy hook secrets."
+            echo "Set STAGING_BACKEND_DEPLOY_HOOK_URL and STAGING_FRONTEND_DEPLOY_HOOK_URL in GitHub repository secrets."
+            exit 1
+          fi

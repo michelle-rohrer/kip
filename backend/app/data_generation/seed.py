@@ -45,7 +45,7 @@ def seed_database(
         _delete_synthetic_users(session, cfg.team_name)
 
     rng = np.random.default_rng(cfg.random_seed)
-    team, coach, players, cycle_rows, wellness_rows, training_rows, injury_rows = build_synthetic_dataset(
+    team, coaches, players, cycle_rows, wellness_rows, training_rows, injury_rows = build_synthetic_dataset(
         rng=rng,
         end_date=end_date,
         config=cfg,
@@ -54,15 +54,16 @@ def seed_database(
     session.add(team)
     session.flush()
 
-    coach.team_id = team.id
+    for coach in coaches:
+        coach.team_id = team.id
     for p in players:
         p.team_id = team.id
 
-    session.add(coach)
+    session.add_all(coaches)
     session.add_all(players)
     session.flush()
 
-    session.add_all(build_privacy_consents(coach=coach, players=players, rng=rng))
+    session.add_all(build_privacy_consents(coaches=coaches, players=players, rng=rng))
     session.add_all(cycle_rows)
     session.add_all(wellness_rows)
     session.add_all(training_rows)

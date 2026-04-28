@@ -65,8 +65,10 @@ def seed_database(
     session.add_all(teams)
     session.flush()
 
-    for idx, coach in enumerate(coaches):
-        coach.team_id = teams[idx % len(teams)].id
+    # Both coaches belong to BTV Aarau F1; second team exists without a coach (e.g. NNV).
+    btv_team_id = teams[0].id
+    for coach in coaches:
+        coach.team_id = btv_team_id
     for p in players:
         p.team_id = int(rng.choice([team.id for team in teams]))
 

@@ -9,6 +9,7 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.schemas.predictions import ModelTrainingStatusResponse, RiskPredictionResponse
+from app.schemas.teams import TeamResponse
 
 __all__ = [
     "MessageResponse",
@@ -19,4 +20,5 @@ __all__ = [
     "UserResponse",
     "RiskPredictionResponse",
     "ModelTrainingStatusResponse",
+    "TeamResponse",
 ]

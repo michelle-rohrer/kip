@@ -8,7 +8,7 @@ from dataclasses import replace
 from datetime import date
 
 import numpy as np
-from sqlalchemy import select
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.data_generation.generate import (
@@ -17,19 +17,28 @@ from app.data_generation.generate import (
     build_synthetic_dataset,
 )
 from app.db import SessionLocal
-from app.models import Team, User
+from app.models import (
+    CycleEntry,
+    InjuryEntry,
+    PrivacyConsent,
+    RiskPrediction,
+    Team,
+    TrainingEntry,
+    User,
+    WellnessEntry,
+)
 
 
-def _delete_synthetic_users(session: Session, team_name: str) -> None:
-    """Remove users created by a previous seed run (ORM cascades delete related rows)."""
-    q = select(User).where(User.email.like("synthetic.%@kip.local"))
-    for user in session.scalars(q).all():
-        session.delete(user)
-    session.flush()
-
-    team = session.scalars(select(Team).where(Team.name == team_name)).first()
-    if team is not None:
-        session.delete(team)
+def _reset_all_application_data(session: Session) -> None:
+    """Remove all app data and accounts before recreating seed data."""
+    session.execute(delete(PrivacyConsent))
+    session.execute(delete(RiskPrediction))
+    session.execute(delete(CycleEntry))
+    session.execute(delete(WellnessEntry))
+    session.execute(delete(TrainingEntry))
+    session.execute(delete(InjuryEntry))
+    session.execute(delete(User))
+    session.execute(delete(Team))
     session.flush()
 
 
@@ -42,10 +51,10 @@ def seed_database(
 ) -> None:
     cfg = config or SyntheticDatasetConfig()
     if replace:
-        _delete_synthetic_users(session, cfg.team_name)
+        _reset_all_application_data(session)
 
     rng = np.random.default_rng(cfg.random_seed)
-    team, coaches, players, cycle_rows, wellness_rows, training_rows, injury_rows = (
+    teams, coaches, players, cycle_rows, wellness_rows, training_rows, injury_rows = (
         build_synthetic_dataset(
             rng=rng,
             end_date=end_date,
@@ -53,13 +62,13 @@ def seed_database(
         )
     )
 
-    session.add(team)
+    session.add_all(teams)
     session.flush()
 
-    for coach in coaches:
-        coach.team_id = team.id
+    for idx, coach in enumerate(coaches):
+        coach.team_id = teams[idx % len(teams)].id
     for p in players:
-        p.team_id = team.id
+        p.team_id = int(rng.choice([team.id for team in teams]))
 
     session.add_all(coaches)
     session.add_all(players)

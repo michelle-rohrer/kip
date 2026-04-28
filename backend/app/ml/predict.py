@@ -47,8 +47,12 @@ def _heuristic_score(features: dict) -> float:
     return float(np.clip(score, 0.02, 0.98))
 
 
-def predict_current_risk(db: Session, *, player_id: int) -> PredictionResult:
-    features_df = build_player_feature_frame(db, player_id=player_id)
+def predict_current_risk(
+    db: Session, *, player_id: int, player_position: str | None = None
+) -> PredictionResult:
+    features_df = build_player_feature_frame(
+        db, player_id=player_id, player_position=player_position
+    )
     if features_df.empty:
         features = {
             "acwr": 1.0,

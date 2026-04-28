@@ -26,3 +26,7 @@ build/
 # Editors / IDE
 .vscode/
 .idea/
+.cursor/
+
+# Build artifacts
+frontend/tsconfig.tsbuildinfo

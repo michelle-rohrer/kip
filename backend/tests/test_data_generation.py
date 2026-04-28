@@ -11,13 +11,14 @@ from app.models import CycleEntry, InjuryEntry, PrivacyConsent, Team, User, Well
 def test_build_synthetic_dataset_produces_expected_entities():
     rng = np.random.default_rng(0)
     cfg = SyntheticDatasetConfig(num_players=15, days_min=14, days_max=14, random_seed=0)
-    team, coaches, players, cycles, wellness, training, injuries = build_synthetic_dataset(
+    teams, coaches, players, cycles, wellness, training, injuries = build_synthetic_dataset(
         rng=rng, config=cfg, end_date=date(2026, 1, 31)
     )
 
-    assert team.name == cfg.team_name
+    assert len(teams) == 2
+    assert {team.name for team in teams} == set(cfg.team_names)
     assert len(coaches) == 2
-    assert {coach.email for coach in coaches} == {cfg.headcoach_email, cfg.athletikcoach_email}
+    assert {coach.username for coach in coaches} == set(cfg.coach_usernames)
     assert len(players) == 15
     assert len(cycles) == 15 * 14
     assert len(wellness) == 15 * 14
@@ -35,7 +36,7 @@ def test_seed_database_persists_and_replace_clears_previous(db_session):
     assert n_users == 17
 
     n_team = db_session.scalar(select(func.count()).select_from(Team))
-    assert n_team == 1
+    assert n_team == 2
 
     assert db_session.scalar(select(func.count()).select_from(CycleEntry)) == 150
     assert db_session.scalar(select(func.count()).select_from(WellnessEntry)) == 150

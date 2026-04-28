@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Team
+from app.models import Team, User, UserRole
 from app.routers import (
     auth_router,
     cycle_router,
@@ -16,7 +16,7 @@ from app.routers import (
     training_router,
     wellness_router,
 )
-from app.services.auth import reset_auth_state
+from app.services.auth import hash_password, reset_auth_state
 
 
 @pytest.fixture()
@@ -43,10 +43,13 @@ def api_client(db_session: Session) -> Generator[TestClient, None, None]:
     reset_auth_state()
 
 
-def _register(client: TestClient, email: str, role: str, name: str, team_id: int | None) -> dict:
+def _register(
+    client: TestClient, username: str, email: str | None, role: str, name: str, team_id: int | None
+) -> dict:
     res = client.post(
         "/api/auth/register",
         json={
+            "username": username,
             "email": email,
             "password": "SuperSecret123",
             "role": role,
@@ -58,13 +61,28 @@ def _register(client: TestClient, email: str, role: str, name: str, team_id: int
     return res.json()
 
 
-def _login(client: TestClient, email: str) -> str:
+def _login(client: TestClient, username: str) -> str:
     res = client.post(
         "/api/auth/login",
-        json={"email": email, "password": "SuperSecret123"},
+        json={"username": username, "password": "SuperSecret123"},
     )
     assert res.status_code == 200, res.text
     return res.json()["access_token"]
+
+
+def _create_coach(db_session: Session, *, username: str, name: str, team_id: int) -> User:
+    coach = User(
+        username=username,
+        email=f"{username}@example.com",
+        password_hash=hash_password("SuperSecret123"),
+        role=UserRole.COACH,
+        name=name,
+        team_id=team_id,
+    )
+    db_session.add(coach)
+    db_session.commit()
+    db_session.refresh(coach)
+    return coach
 
 
 @pytest.fixture()
@@ -74,15 +92,17 @@ def team_and_users(db_session: Session, api_client: TestClient) -> dict:
     db_session.commit()
     db_session.refresh(team)
 
-    coach = _register(api_client, "coach@example.com", "coach", "Coach", team.id)
-    player = _register(api_client, "player@example.com", "player", "Player", team.id)
+    coach = _create_coach(db_session, username="coach_alpha", name="Coach", team_id=team.id)
+    player = _register(
+        api_client, "player_alpha", "player@example.com", "player", "Player", team.id
+    )
 
-    coach_token = _login(api_client, "coach@example.com")
-    player_token = _login(api_client, "player@example.com")
+    coach_token = _login(api_client, "coach_alpha")
+    player_token = _login(api_client, "player_alpha")
 
     return {
         "team_id": team.id,
-        "coach_id": coach["id"],
+        "coach_id": coach.id,
         "player_id": player["id"],
         "coach_token": coach_token,
         "player_token": player_token,
@@ -245,11 +265,13 @@ def test_training_coach_different_team_forbidden(
     db_session.refresh(team_a)
     db_session.refresh(team_b)
 
-    _register(api_client, "coach_a@example.com", "coach", "Coach A", team_a.id)
-    player_b = _register(api_client, "player_b@example.com", "player", "Player B", team_b.id)
+    _create_coach(db_session, username="coach_a", name="Coach A", team_id=team_a.id)
+    player_b = _register(
+        api_client, "player_b", "player_b@example.com", "player", "Player B", team_b.id
+    )
 
-    player_token = _login(api_client, "player_b@example.com")
-    coach_token = _login(api_client, "coach_a@example.com")
+    player_token = _login(api_client, "player_b")
+    coach_token = _login(api_client, "coach_a")
 
     assert (
         api_client.post(
@@ -378,9 +400,9 @@ def test_predictions_player_cannot_read_other_player(
     db_session.commit()
     db_session.refresh(team)
 
-    p1 = _register(api_client, "pred.p1@example.com", "player", "Pred P1", team.id)
-    p2 = _register(api_client, "pred.p2@example.com", "player", "Pred P2", team.id)
-    token1 = _login(api_client, "pred.p1@example.com")
+    p1 = _register(api_client, "pred_p1", "pred.p1@example.com", "player", "Pred P1", team.id)
+    p2 = _register(api_client, "pred_p2", "pred.p2@example.com", "player", "Pred P2", team.id)
+    token1 = _login(api_client, "pred_p1")
 
     res = api_client.get(
         f"/api/predictions/{p2['id']}",

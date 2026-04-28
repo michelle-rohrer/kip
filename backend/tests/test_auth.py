@@ -38,6 +38,7 @@ def test_register_and_me(client: TestClient) -> None:
     register_res = client.post(
         "/api/auth/register",
         json={
+            "username": "player_one",
             "email": "player@example.com",
             "password": "SuperSecret123",
             "role": "player",
@@ -49,7 +50,7 @@ def test_register_and_me(client: TestClient) -> None:
 
     login_res = client.post(
         "/api/auth/login",
-        json={"email": "player@example.com", "password": "SuperSecret123"},
+        json={"username": "player_one", "password": "SuperSecret123"},
     )
     assert login_res.status_code == 200
     access_token = login_res.json()["access_token"]
@@ -62,7 +63,7 @@ def test_register_and_me(client: TestClient) -> None:
 def test_login_rejects_invalid_credentials(client: TestClient) -> None:
     res = client.post(
         "/api/auth/login",
-        json={"email": "missing@example.com", "password": "wrong-password"},
+        json={"username": "missing_user", "password": "wrong-password"},
     )
     assert res.status_code == 401
 
@@ -71,15 +72,16 @@ def test_refresh_rotates_and_logout_invalidates_refresh_token(client: TestClient
     client.post(
         "/api/auth/register",
         json={
+            "username": "coach_one",
             "email": "coach@example.com",
             "password": "SuperSecret123",
-            "role": "coach",
+            "role": "player",
             "name": "Coach One",
         },
     )
     login_res = client.post(
         "/api/auth/login",
-        json={"email": "coach@example.com", "password": "SuperSecret123"},
+        json={"username": "coach_one", "password": "SuperSecret123"},
     )
     refresh_token = login_res.json()["refresh_token"]
 
@@ -107,6 +109,7 @@ def test_invalid_access_token_rejected(client: TestClient) -> None:
 
 def test_require_role_forbidden_for_non_coach(client: TestClient, db_session: Session) -> None:
     user = User(
+        username="player_two",
         email="player2@example.com",
         password_hash=hash_password("SuperSecret123"),
         role=UserRole.PLAYER,
@@ -117,9 +120,22 @@ def test_require_role_forbidden_for_non_coach(client: TestClient, db_session: Se
 
     login_res = client.post(
         "/api/auth/login",
-        json={"email": "player2@example.com", "password": "SuperSecret123"},
+        json={"username": "player_two", "password": "SuperSecret123"},
     )
     token = login_res.json()["access_token"]
 
     role_res = client.get("/api/coach-only", headers={"Authorization": f"Bearer {token}"})
     assert role_res.status_code == 403
+
+
+def test_register_rejects_coach_role(client: TestClient) -> None:
+    res = client.post(
+        "/api/auth/register",
+        json={
+            "username": "blocked_coach",
+            "password": "SuperSecret123",
+            "role": "coach",
+            "name": "Blocked Coach",
+        },
+    )
+    assert res.status_code == 403

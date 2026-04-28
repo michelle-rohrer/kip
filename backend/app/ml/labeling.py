@@ -10,11 +10,17 @@ def add_overload_label(df: pd.DataFrame) -> pd.DataFrame:
         return out
 
     out = df.copy()
-    overload_today = (
+    heuristic_overload_today = (
         (out["acwr"] >= 1.35)
         | (out["muscle_soreness"] >= 8)
         | ((out["stress_level"] >= 8) & (out["mental_energy"] <= 4))
     )
+    injury_overload_today = (
+        (out.get("injury_time_loss_days", 0) > 0)
+        | (out.get("injury_medical_attention", 0) > 0)
+        | (out.get("injury_pain_intensity", 0) >= 7)
+    )
+    overload_today = heuristic_overload_today | injury_overload_today
 
     horizon = 3
     future_flag = pd.Series(False, index=out.index)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
+from uuid import uuid4
 
 import numpy as np
 
@@ -66,12 +67,10 @@ class SyntheticDatasetConfig:
     num_players: int = 18
     days_min: int = 90
     days_max: int = 180
-    team_name: str = "Synthetic Team KIP"
-    headcoach_email: str = "synthetic.headcoach@kip.local"
-    headcoach_name: str = "Headcoach"
-    athletikcoach_email: str = "synthetic.athletiktrainerin@kip.local"
-    athletikcoach_name: str = "Athletiktrainerin"
-    coach_password: str = "synthetic-seed-password"
+    team_names: tuple[str, str] = ("BTV Aarau F1", "Eaglets NNV")
+    coach_usernames: tuple[str, str] = ("Timo", "Denise")
+    coach_names: tuple[str, str] = ("Timo", "Denise")
+    coach_passwords: tuple[str, str] = ("Killerlippi610", "cazzo!")
     player_password: str = "synthetic-seed-password"
     random_seed: int | None = 42
 
@@ -83,6 +82,7 @@ def build_privacy_consents(
     rng: np.random.Generator,
 ) -> list[PrivacyConsent]:
     """Create one consent row per player and synthetic coach."""
+    _ = rng
     rows: list[PrivacyConsent] = []
     for coach in coaches:
         for player in players:
@@ -90,8 +90,8 @@ def build_privacy_consents(
                 PrivacyConsent(
                     player=player,
                     coach=coach,
-                    share_cycle_data=bool(rng.random() < 0.72),
-                    share_wellness_data=bool(rng.random() < 0.78),
+                    share_cycle_data=False,
+                    share_wellness_data=False,
                 )
             )
     return rows
@@ -103,7 +103,7 @@ def build_synthetic_dataset(
     end_date: date | None = None,
     config: SyntheticDatasetConfig | None = None,
 ) -> tuple[
-    Team,
+    list[Team],
     list[User],
     list[User],
     list[CycleEntry],
@@ -117,22 +117,23 @@ def build_synthetic_dataset(
         end_date = date.today()
 
     n_players = int(np.clip(cfg.num_players, 15, 20))
-    team = Team(name=cfg.team_name)
-    coach_pw = hash_password(cfg.coach_password)
+    teams = [Team(name=cfg.team_names[0]), Team(name=cfg.team_names[1])]
     coaches = [
         User(
-            email=cfg.headcoach_email,
-            password_hash=coach_pw,
+            username=cfg.coach_usernames[0],
+            email=None,
+            password_hash=hash_password(cfg.coach_passwords[0]),
             role=UserRole.COACH,
             team_id=None,
-            name=cfg.headcoach_name,
+            name=cfg.coach_names[0],
         ),
         User(
-            email=cfg.athletikcoach_email,
-            password_hash=coach_pw,
+            username=cfg.coach_usernames[1],
+            email=None,
+            password_hash=hash_password(cfg.coach_passwords[1]),
             role=UserRole.COACH,
             team_id=None,
-            name=cfg.athletikcoach_name,
+            name=cfg.coach_names[1],
         ),
     ]
 
@@ -140,10 +141,12 @@ def build_synthetic_dataset(
     for i in range(n_players):
         players.append(
             User(
+                username=f"player.{i + 1:02d}",
                 email=f"synthetic.player.{i + 1:02d}@kip.local",
                 password_hash=hash_password(cfg.player_password),
                 role=UserRole.PLAYER,
                 team_id=None,
+                training_uid=uuid4().hex,
                 name=f"Synthetic Player {i + 1:02d}",
             )
         )
@@ -202,6 +205,9 @@ def build_synthetic_dataset(
                     date=d,
                     duration_min=duration,
                     intensity=intensity,
+                    session_rpe=None,
+                    session_type=None,
+                    strength_values=None,
                 )
             )
 
@@ -328,8 +334,10 @@ def build_synthetic_dataset(
                         body_location=loc,
                         pain_intensity=pain,
                         is_chronic=bool(player_rng.random() < 0.15),
+                        medical_attention=False,
+                        time_loss_days=None,
                         description="Synthetischer Eintrag (Seed)",
                     )
                 )
 
-    return team, coaches, players, cycle_rows, wellness_rows, training_rows, injury_rows
+    return teams, coaches, players, cycle_rows, wellness_rows, training_rows, injury_rows

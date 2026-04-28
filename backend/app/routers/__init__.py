@@ -5,6 +5,7 @@ from app.routers.cycle import router as cycle_router
 from app.routers.injury import router as injury_router
 from app.routers.predictions import router as predictions_router
 from app.routers.privacy import router as privacy_router
+from app.routers.teams import router as teams_router
 from app.routers.training import router as training_router
 from app.routers.wellness import router as wellness_router
 
@@ -14,6 +15,7 @@ __all__ = [
     "injury_router",
     "predictions_router",
     "privacy_router",
+    "teams_router",
     "training_router",
     "wellness_router",
 ]

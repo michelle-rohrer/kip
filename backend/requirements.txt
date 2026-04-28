@@ -6,9 +6,9 @@ psycopg2-binary
 pydantic
 email-validator
 python-jose[cryptography]
-passlib[bcrypt]
 bcrypt
 scikit-learn
+joblib
 pandas
 numpy
 pytest

@@ -1,12 +1,14 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import UserRole
 
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: str = Field(pattern=EMAIL_PATTERN)
     password: str = Field(min_length=8, max_length=128)
     role: UserRole
     team_id: int | None = None
@@ -14,13 +16,13 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str = Field(pattern=EMAIL_PATTERN)
     password: str = Field(min_length=1, max_length=128)
 
 
 class UserResponse(BaseModel):
     id: int
-    email: EmailStr
+    email: str = Field(pattern=EMAIL_PATTERN)
     role: UserRole
     team_id: int | None
     name: str

@@ -21,7 +21,9 @@ def get_current_user(
     payload = decode_token(credentials.credentials, expected_type="access")
     user = db.get(User, int(payload["sub"]))
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists"
+        )
     return user
 
 
@@ -30,7 +32,9 @@ def require_role(role: UserRole | str) -> Callable[..., User]:
 
     def _require_role(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role.value != role_value:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+            )
         return current_user
 
     return _require_role

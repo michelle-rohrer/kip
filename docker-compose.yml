@@ -41,6 +41,20 @@ services:
       timeout: 5s
       retries: 5
 
+  retrainer:
+    build:
+      context: ./backend
+    container_name: calm_retrainer
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["python", "-m", "app.ml.scheduler"]
+    networks:
+      - calm_net
+    depends_on:
+      db:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

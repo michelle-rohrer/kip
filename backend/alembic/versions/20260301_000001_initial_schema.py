@@ -8,7 +8,6 @@ Create Date: 2026-03-01 00:00:01
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision = "20260301_000001"
 down_revision = None
@@ -79,7 +78,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("player_id", "date", name="uq_wellness_entries_player_date"),
     )
     op.create_index("ix_wellness_entries_id", "wellness_entries", ["id"], unique=False)
-    op.create_index("ix_wellness_entries_player_id", "wellness_entries", ["player_id"], unique=False)
+    op.create_index(
+        "ix_wellness_entries_player_id", "wellness_entries", ["player_id"], unique=False
+    )
 
     op.create_table(
         "training_entries",
@@ -94,7 +95,9 @@ def upgrade() -> None:
         sa.Column("match_stats", sa.JSON(), nullable=True),
     )
     op.create_index("ix_training_entries_id", "training_entries", ["id"], unique=False)
-    op.create_index("ix_training_entries_player_id", "training_entries", ["player_id"], unique=False)
+    op.create_index(
+        "ix_training_entries_player_id", "training_entries", ["player_id"], unique=False
+    )
 
     op.create_table(
         "injury_entries",
@@ -121,7 +124,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("player_id", "coach_id", name="uq_privacy_consents_player_coach"),
     )
     op.create_index("ix_privacy_consents_id", "privacy_consents", ["id"], unique=False)
-    op.create_index("ix_privacy_consents_player_id", "privacy_consents", ["player_id"], unique=False)
+    op.create_index(
+        "ix_privacy_consents_player_id", "privacy_consents", ["player_id"], unique=False
+    )
     op.create_index("ix_privacy_consents_coach_id", "privacy_consents", ["coach_id"], unique=False)
 
     op.create_table(
@@ -135,7 +140,9 @@ def upgrade() -> None:
         sa.Column("features_used", sa.JSON(), nullable=False),
     )
     op.create_index("ix_risk_predictions_id", "risk_predictions", ["id"], unique=False)
-    op.create_index("ix_risk_predictions_player_id", "risk_predictions", ["player_id"], unique=False)
+    op.create_index(
+        "ix_risk_predictions_player_id", "risk_predictions", ["player_id"], unique=False
+    )
 
 
 def downgrade() -> None:

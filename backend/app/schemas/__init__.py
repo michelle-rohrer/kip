@@ -8,7 +8,7 @@ from app.schemas.auth import (
     UserLogin,
     UserResponse,
 )
-from app.schemas.predictions import RiskPredictionResponse
+from app.schemas.predictions import ModelTrainingStatusResponse, RiskPredictionResponse
 
 __all__ = [
     "MessageResponse",
@@ -18,4 +18,5 @@ __all__ = [
     "UserLogin",
     "UserResponse",
     "RiskPredictionResponse",
+    "ModelTrainingStatusResponse",
 ]

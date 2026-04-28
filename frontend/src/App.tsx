@@ -1,4 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import volleySyncIcon from "./assets/volleysync-icon.svg";
+import { LANGUAGE_KEY, LOCALES, TEXT, Language } from "./i18n";
 
 type User = {
   id: number;
@@ -44,6 +46,7 @@ type CycleEntry = {
 type PrivacyConsent = {
   id: number;
   coach_id: number;
+  coach_name?: string | null;
   share_cycle_data: boolean;
   share_wellness_data: boolean;
 };
@@ -56,6 +59,16 @@ type Prediction = {
   risk_level: "green" | "yellow" | "red";
   model_version: string;
   features_used?: Record<string, unknown>;
+};
+
+type ModelTrainingStatus = {
+  status: "ok" | "failed";
+  updated_at: string;
+  last_success_at?: string | null;
+  last_failure_at?: string | null;
+  error?: string | null;
+  metrics?: Record<string, unknown> | null;
+  context?: Record<string, unknown> | null;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -75,9 +88,9 @@ type TrainingEntry = {
 };
 
 async function apiRequest<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(init?.headers ?? {}),
+    ...((init?.headers as Record<string, string> | undefined) ?? {}),
   };
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
@@ -85,7 +98,12 @@ async function apiRequest<T>(path: string, init?: RequestInit, accessToken?: str
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `HTTP ${response.status}`);
+    try {
+      const parsed = JSON.parse(text) as { detail?: string };
+      throw new Error(parsed.detail || `HTTP ${response.status}`);
+    } catch {
+      throw new Error(text || `HTTP ${response.status}`);
+    }
   }
   return (await response.json()) as T;
 }
@@ -112,11 +130,46 @@ function formatTrendPoints(values: number[]) {
     .join(" ");
 }
 
+function formatSleepHours(hours: number) {
+  return (Math.round(hours * 10) / 10).toFixed(1);
+}
+
+function formatShortDate(isoDate: string, locale: string) {
+  const date = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return isoDate;
+  }
+  return date.toLocaleDateString(locale, { day: "2-digit", month: "2-digit" });
+}
+
+function formatDateTime(value: string | null | undefined, locale: string) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(locale);
+}
+
 function App() {
-  const [email, setEmail] = useState("synthetic.coach.01@kip.local");
-  const [password, setPassword] = useState("synthetic-seed-password");
-  const [accessToken, setAccessToken] = useState<string | null>(() => localStorage.getItem(ACCESS_TOKEN_KEY));
-  const [refreshToken, setRefreshToken] = useState<string | null>(() => localStorage.getItem(REFRESH_TOKEN_KEY));
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem(LANGUAGE_KEY);
+    if (saved === "de" || saved === "en" || saved === "it") {
+      return saved;
+    }
+    return "de";
+  });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [registerForm, setRegisterForm] = useState({
+    email: "",
+    password: "",
+    name: "",
+    role: "player" as "player" | "coach",
+    team_id: "",
+  });
+  const [accessToken, setAccessToken] = useState<string | null>(() =>
+    sessionStorage.getItem(ACCESS_TOKEN_KEY),
+  );
   const [user, setUser] = useState<User | null>(null);
   const [tab, setTab] = useState<AppTab>("dashboard");
   const [message, setMessage] = useState<string | null>(null);
@@ -134,6 +187,9 @@ function App() {
   const [selectedPlayerTraining, setSelectedPlayerTraining] = useState<TrainingEntry[]>([]);
   const [selectedPlayerCycleBlocked, setSelectedPlayerCycleBlocked] = useState(false);
   const [selectedPlayerWellnessBlocked, setSelectedPlayerWellnessBlocked] = useState(false);
+  const [isWellnessDetailOpen, setIsWellnessDetailOpen] = useState(false);
+  const [selectedTrendIndex, setSelectedTrendIndex] = useState<number | null>(null);
+  const [modelStatus, setModelStatus] = useState<ModelTrainingStatus | null>(null);
 
   const [wellnessForm, setWellnessForm] = useState({
     date: new Date().toISOString().slice(0, 10),
@@ -158,12 +214,17 @@ function App() {
     contraception_type: "",
     notes: "",
   });
+  const t = TEXT[language];
+  const locale = LOCALES[language];
+
+  useEffect(() => {
+    localStorage.setItem(LANGUAGE_KEY, language);
+  }, [language]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
     setAccessToken(null);
-    setRefreshToken(null);
     setUser(null);
     setWellness([]);
     setCycle([]);
@@ -176,8 +237,8 @@ function App() {
     setSelectedPlayerTraining([]);
     setSelectedPlayerCycleBlocked(false);
     setSelectedPlayerWellnessBlocked(false);
-    setMessage("Abgemeldet.");
-  }, []);
+    setMessage(t.logoutDone);
+  }, [t.logoutDone]);
 
   const loadPlayerData = useCallback(async () => {
     if (!accessToken || !user || user.role !== "player") return;
@@ -195,11 +256,11 @@ function App() {
       setConsents(privacyConsents);
       setPrediction(risk);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unbekannter Fehler beim Laden.");
+      setError(e instanceof Error ? e.message : t.unknownLoadError);
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, user]);
+  }, [accessToken, t.unknownLoadError, user]);
 
   const loadCoachData = useCallback(async () => {
     if (!accessToken || !user || user.role !== "coach") return;
@@ -212,11 +273,25 @@ function App() {
         setSelectedPlayerId(team[0].player_id ?? null);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Teamdaten konnten nicht geladen werden.");
+      setError(e instanceof Error ? e.message : t.teamLoadFailed);
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, user, selectedPlayerId]);
+  }, [accessToken, selectedPlayerId, t.teamLoadFailed, user]);
+
+  const loadModelStatus = useCallback(async () => {
+    if (!accessToken || !user) return;
+    try {
+      const status = await apiRequest<ModelTrainingStatus>(
+        "/api/predictions/model-status",
+        undefined,
+        accessToken,
+      );
+      setModelStatus(status);
+    } catch {
+      setModelStatus(null);
+    }
+  }, [accessToken, user]);
 
   const loadCoachPlayerDetail = useCallback(async () => {
     if (!accessToken || !user || user.role !== "coach" || !selectedPlayerId) return;
@@ -251,11 +326,11 @@ function App() {
         setSelectedPlayerTraining([]);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Detaildaten konnten nicht geladen werden.");
+      setError(e instanceof Error ? e.message : t.detailLoadFailed);
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, user, selectedPlayerId]);
+  }, [accessToken, selectedPlayerId, t.detailLoadFailed, user]);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -265,10 +340,10 @@ function App() {
         setTab(me.role === "coach" ? "team" : "dashboard");
       })
       .catch((e) => {
-        setError(e instanceof Error ? e.message : "Session konnte nicht geladen werden.");
+        setError(e instanceof Error ? e.message : t.sessionLoadFailed);
         logout();
       });
-  }, [accessToken, logout]);
+  }, [accessToken, logout, t.sessionLoadFailed]);
 
   useEffect(() => {
     if (user?.role === "player") {
@@ -281,6 +356,11 @@ function App() {
   }, [loadCoachData, loadPlayerData, user?.role]);
 
   useEffect(() => {
+    if (!user) return;
+    void loadModelStatus();
+  }, [loadModelStatus, user]);
+
+  useEffect(() => {
     if (user?.role === "coach") {
       void loadCoachPlayerDetail();
     }
@@ -290,11 +370,23 @@ function App() {
     return wellness
       .slice(0, 7)
       .reverse()
-      .map((entry) => Math.round((entry.sleep_quality + entry.mental_energy + entry.motivation) / 3));
+      .map((entry) => ({
+        date: entry.date,
+        sleep_quality: entry.sleep_quality,
+        mental_energy: entry.mental_energy,
+        motivation: entry.motivation,
+        score: Math.round((entry.sleep_quality + entry.mental_energy + entry.motivation) / 3),
+      }));
   }, [wellness]);
+
+  const selectedTrendPoint = useMemo(() => {
+    if (selectedTrendIndex === null) return null;
+    return wellnessTrend[selectedTrendIndex] ?? null;
+  }, [selectedTrendIndex, wellnessTrend]);
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setIsLoading(true);
     setError(null);
     setMessage(null);
     try {
@@ -302,54 +394,103 @@ function App() {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
-      localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
-      localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+      sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
       setAccessToken(tokens.access_token);
-      setRefreshToken(tokens.refresh_token);
-      setMessage("Login erfolgreich.");
+      setMessage(t.loginSuccess);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Login fehlgeschlagen.");
+      setError(e instanceof Error ? e.message : t.loginFailed);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiRequest<User>("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          email: registerForm.email,
+          password: registerForm.password,
+          role: registerForm.role,
+          name: registerForm.name,
+          team_id: registerForm.team_id ? Number(registerForm.team_id) : null,
+        }),
+      });
+      setMessage(t.registerSuccess);
+      setEmail(registerForm.email);
+      setPassword(registerForm.password);
+      setIsRegisterMode(false);
+      setRegisterForm({
+        email: "",
+        password: "",
+        name: "",
+        role: "player",
+        team_id: "",
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.registerFailed);
+    } finally {
+      setIsLoading(false);
     }
   }
 
   async function handleWellnessSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!accessToken) return;
+    setIsLoading(true);
     setError(null);
     try {
-      await apiRequest<WellnessEntry>("/api/wellness/", {
-        method: "POST",
-        body: JSON.stringify({
-          ...wellnessForm,
-          rpe_previous_day: wellnessForm.rpe_previous_day || null,
-          free_text: wellnessForm.free_text || null,
-        }),
-      }, accessToken);
-      setMessage("Wellness-Check gespeichert.");
+      await apiRequest<WellnessEntry>(
+        "/api/wellness/",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...wellnessForm,
+            rpe_previous_day: wellnessForm.rpe_previous_day,
+            free_text: wellnessForm.free_text || null,
+          }),
+        },
+        accessToken,
+      );
+      setMessage(t.wellnessSaved);
       await loadPlayerData();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Wellness konnte nicht gespeichert werden.");
+      setError(e instanceof Error ? e.message : t.wellnessSaveFailed);
+    } finally {
+      setIsLoading(false);
     }
   }
 
   async function handleCycleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!accessToken) return;
+    setIsLoading(true);
     setError(null);
     try {
-      await apiRequest<CycleEntry>("/api/cycle/", {
-        method: "POST",
-        body: JSON.stringify({
-          ...cycleForm,
-          pms_score: cycleForm.pms_score || null,
-          contraception_type: cycleForm.contraception_type || null,
-          notes: cycleForm.notes || null,
-        }),
-      }, accessToken);
-      setMessage("Zyklus-Eintrag gespeichert.");
+      await apiRequest<CycleEntry>(
+        "/api/cycle/",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...cycleForm,
+            pms_score: cycleForm.pms_score,
+            contraception_type: cycleForm.contraception_type || null,
+            notes: cycleForm.notes || null,
+          }),
+        },
+        accessToken,
+      );
+      setMessage(t.cycleSaved);
       await loadPlayerData();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Zyklus-Eintrag konnte nicht gespeichert werden.");
+      setError(e instanceof Error ? e.message : t.cycleSaveFailed);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -357,18 +498,22 @@ function App() {
     if (!accessToken) return;
     setError(null);
     try {
-      await apiRequest<PrivacyConsent>("/api/privacy/consent", {
-        method: "PUT",
-        body: JSON.stringify({
-          coach_id: consent.coach_id,
-          share_cycle_data: consent.share_cycle_data,
-          share_wellness_data: consent.share_wellness_data,
-        }),
-      }, accessToken);
-      setMessage(`Freigaben fuer Coach ${consent.coach_id} gespeichert.`);
+      await apiRequest<PrivacyConsent>(
+        "/api/privacy/consent",
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            coach_id: consent.coach_id,
+            share_cycle_data: consent.share_cycle_data,
+            share_wellness_data: consent.share_wellness_data,
+          }),
+        },
+        accessToken,
+      );
+      setMessage(`${t.consentSavedPrefix} ${consent.coach_id} ${t.consentSavedSuffix}`);
       await loadPlayerData();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Privacy-Einstellungen konnten nicht gespeichert werden.");
+      setError(e instanceof Error ? e.message : t.privacySaveFailed);
     }
   }
 
@@ -376,66 +521,251 @@ function App() {
     <main className="min-h-screen bg-slate-50 text-slate-900">
       <section className="mx-auto max-w-5xl px-6 py-10">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">{user?.role === "coach" ? "Trainerinnen-App" : "Spielerinnen-App"}</h1>
-            <p className="mt-1 text-slate-700">
-              {user?.role === "coach"
-                ? "Team-Uebersicht mit Ampelsystem und Detailansichten."
-                : "Wellness, Zyklus, Risiko-Dashboard und Privacy-Freigaben."}
-            </p>
+          <div className="flex items-start gap-4">
+            <img
+              src={volleySyncIcon}
+              alt="VolleySync Icon"
+              className="h-12 w-12 rounded-lg shadow-sm"
+            />
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                VolleySync
+              </p>
+              <h1 className="text-3xl font-bold">
+                {user?.role === "coach" ? t.coachApp : t.playerApp}
+              </h1>
+              <p className="mt-1 text-slate-700">{t.appTagline}</p>
+            </div>
           </div>
-          {user && (
-            <button className="rounded bg-slate-800 px-4 py-2 text-white" onClick={logout} type="button">
-              Logout
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-700">
+              {t.language}
+              <select
+                className="ml-2 rounded border bg-white px-2 py-1 text-sm"
+                value={language}
+                onChange={(event) => setLanguage(event.target.value as Language)}
+              >
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+                <option value="it">Italiano</option>
+              </select>
+            </label>
+            {user && (
+              <button
+                className="rounded bg-slate-800 px-4 py-2 text-white"
+                onClick={logout}
+                type="button"
+              >
+                {t.logout}
+              </button>
+            )}
+          </div>
         </header>
 
         {error && <p className="mb-4 rounded bg-red-100 px-4 py-2 text-sm text-red-800">{error}</p>}
-        {message && <p className="mb-4 rounded bg-emerald-100 px-4 py-2 text-sm text-emerald-800">{message}</p>}
+        {message && (
+          <p className="mb-4 rounded bg-emerald-100 px-4 py-2 text-sm text-emerald-800">
+            {message}
+          </p>
+        )}
 
         {!user && (
-          <form className="max-w-md space-y-3 rounded bg-white p-6 shadow" onSubmit={handleLogin}>
-            <h2 className="text-xl font-semibold">Login</h2>
-            <label className="block text-sm">
-              E-Mail
-              <input
-                className="mt-1 w-full rounded border px-3 py-2"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                type="email"
-                required
-              />
-            </label>
-            <label className="block text-sm">
-              Passwort
-              <input
-                className="mt-1 w-full rounded border px-3 py-2"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                type="password"
-                required
-              />
-            </label>
-            <button className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white" type="submit">
-              Einloggen
-            </button>
-          </form>
+          <div className="max-w-md space-y-3 rounded bg-white p-6 shadow">
+            <div className="mb-1 flex gap-2">
+              <button
+                type="button"
+                className={`rounded px-3 py-1 text-sm ${
+                  !isRegisterMode ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"
+                }`}
+                onClick={() => setIsRegisterMode(false)}
+              >
+                {t.login}
+              </button>
+              <button
+                type="button"
+                className={`rounded px-3 py-1 text-sm ${
+                  isRegisterMode ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"
+                }`}
+                onClick={() => setIsRegisterMode(true)}
+              >
+                {t.register}
+              </button>
+            </div>
+
+            {!isRegisterMode ? (
+              <form className="space-y-3" onSubmit={handleLogin}>
+                <h2 className="text-xl font-semibold">{t.login}</h2>
+                <p className="text-xs text-slate-600">
+                  {t.seedCoaches}: <code>synthetic.headcoach@kip.local</code> {t.and}{" "}
+                  <code>synthetic.athletiktrainerin@kip.local</code>
+                </p>
+                <label className="block text-sm">
+                  {t.email}
+                  <input
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    type="email"
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  {t.password}
+                  <input
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    type="password"
+                    required
+                  />
+                </label>
+                <button
+                  className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {isLoading ? t.loggingIn : t.signIn}
+                </button>
+              </form>
+            ) : (
+              <form className="space-y-3" onSubmit={handleRegister}>
+                <h2 className="text-xl font-semibold">{t.register}</h2>
+                <label className="block text-sm">
+                  {t.name}
+                  <input
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={registerForm.name}
+                    onChange={(event) =>
+                      setRegisterForm((prev) => ({ ...prev, name: event.target.value }))
+                    }
+                    type="text"
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  {t.email}
+                  <input
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={registerForm.email}
+                    onChange={(event) =>
+                      setRegisterForm((prev) => ({ ...prev, email: event.target.value }))
+                    }
+                    type="email"
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  {t.password} ({t.passwordMin})
+                  <input
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={registerForm.password}
+                    onChange={(event) =>
+                      setRegisterForm((prev) => ({ ...prev, password: event.target.value }))
+                    }
+                    type="password"
+                    minLength={8}
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  {t.role}
+                  <select
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={registerForm.role}
+                    onChange={(event) =>
+                      setRegisterForm((prev) => ({
+                        ...prev,
+                        role: event.target.value as "player" | "coach",
+                      }))
+                    }
+                  >
+                    <option value="player">{t.player}</option>
+                    <option value="coach">{t.coachRole}</option>
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  {t.teamIdOptional}
+                  <input
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={registerForm.team_id}
+                    onChange={(event) =>
+                      setRegisterForm((prev) => ({ ...prev, team_id: event.target.value }))
+                    }
+                    type="number"
+                    min={1}
+                  />
+                </label>
+                <button
+                  className="w-full rounded bg-emerald-600 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {isLoading ? t.registering : t.createAccount}
+                </button>
+              </form>
+            )}
+          </div>
         )}
 
         {user && (
           <>
+            <section className="mb-4 rounded bg-white p-4 shadow">
+              <h3 className="text-lg font-semibold">{t.modelTrainingStatus}</h3>
+              {!modelStatus ? (
+                <p className="mt-2 text-sm text-slate-600">{t.noTrainingStatus}</p>
+              ) : (
+                <div className="mt-2 grid gap-2 text-sm md:grid-cols-2">
+                  <p>
+                    {t.status}:{" "}
+                    <span
+                      className={
+                        modelStatus.status === "ok"
+                          ? "font-semibold text-emerald-700"
+                          : "font-semibold text-red-700"
+                      }
+                    >
+                      {modelStatus.status}
+                    </span>
+                  </p>
+                  <p>
+                    {t.updated}: {formatDateTime(modelStatus.updated_at, locale)}
+                  </p>
+                  <p>
+                    {t.lastSuccess}: {formatDateTime(modelStatus.last_success_at, locale)}
+                  </p>
+                  <p>
+                    {t.lastFailure}: {formatDateTime(modelStatus.last_failure_at, locale)}
+                  </p>
+                  <p>
+                    {t.mode}:{" "}
+                    {String(
+                      (modelStatus.metrics?.training_data_mode as string | undefined) ?? t.unknown,
+                    )}
+                  </p>
+                  <p>
+                    {t.realRows}:{" "}
+                    {String((modelStatus.metrics?.real_rows as number | undefined) ?? "-")}
+                  </p>
+                  {modelStatus.error && (
+                    <p className="md:col-span-2 text-red-700">
+                      {t.error}: {modelStatus.error}
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+
             <nav className="mb-6 flex flex-wrap gap-2">
               {(user.role === "coach"
                 ? [
-                    { key: "team", label: "Team-Uebersicht" },
-                    { key: "detail", label: "Spielerinnen-Detail" },
+                    { key: "team", label: t.teamOverview },
+                    { key: "detail", label: t.playerDetail },
                   ]
                 : [
-                    { key: "dashboard", label: "Dashboard" },
-                    { key: "wellness", label: "Wellness-Check" },
-                    { key: "cycle", label: "Zyklus" },
-                    { key: "privacy", label: "Privacy-Settings" },
+                    { key: "dashboard", label: t.dashboard },
+                    { key: "wellness", label: t.wellnessCheck },
+                    { key: "cycle", label: t.cycle },
+                    { key: "privacy", label: t.privacySettings },
                   ]
               ).map((item) => (
                 <button
@@ -451,54 +781,183 @@ function App() {
               ))}
             </nav>
 
-            {isLoading && <p className="mb-4 text-sm text-slate-600">Daten werden geladen...</p>}
+            {isLoading && <p className="mb-4 text-sm text-slate-600">{t.loadingData}</p>}
 
             {user.role === "player" && tab === "dashboard" && (
               <section className="grid gap-4 md:grid-cols-2">
                 <article className="rounded bg-white p-4 shadow">
-                  <h3 className="text-lg font-semibold">Aktueller Risiko-Score</h3>
+                  <h3 className="text-lg font-semibold">{t.currentRiskScore}</h3>
                   {prediction ? (
                     <div className="mt-3 flex items-center gap-3">
-                      <span className={`h-4 w-4 rounded-full ${riskColor(prediction.risk_level)}`} />
+                      <span
+                        className={`h-4 w-4 rounded-full ${riskColor(prediction.risk_level)}`}
+                      />
                       <p>
-                        {prediction.risk_level.toUpperCase()} - {(prediction.risk_score * 100).toFixed(1)}%
+                        {prediction.risk_level.toUpperCase()} -{" "}
+                        {(prediction.risk_score * 100).toFixed(1)}%
                       </p>
                     </div>
                   ) : (
-                    <p className="mt-2 text-sm text-slate-600">Keine Vorhersage vorhanden.</p>
+                    <p className="mt-2 text-sm text-slate-600">{t.noPrediction}</p>
                   )}
                 </article>
                 <article className="rounded bg-white p-4 shadow">
-                  <h3 className="text-lg font-semibold">Wellness-Trend (7 Tage)</h3>
+                  <h3 className="text-lg font-semibold">{t.wellnessTrend}</h3>
+                  <p className="mt-2 text-sm text-slate-600">{t.trendDescription}</p>
                   {wellnessTrend.length > 1 ? (
-                    <svg viewBox="0 0 100 100" className="mt-3 h-28 w-full rounded bg-slate-100 p-2">
+                    <>
+                      <svg
+                        viewBox="0 0 100 100"
+                        className="mt-3 h-28 w-full rounded bg-slate-100 p-2"
+                      >
+                        <line x1="0" y1="0" x2="100" y2="0" stroke="#cbd5e1" strokeWidth="1" />
+                        <line x1="0" y1="100" x2="100" y2="100" stroke="#cbd5e1" strokeWidth="1" />
+                        <polyline
+                          fill="none"
+                          stroke="#2563eb"
+                          strokeWidth="3"
+                          points={formatTrendPoints(wellnessTrend.map((point) => point.score))}
+                        />
+                        {wellnessTrend.map((point, idx) => {
+                          const max = Math.max(...wellnessTrend.map((item) => item.score));
+                          const min = Math.min(...wellnessTrend.map((item) => item.score));
+                          const spread = Math.max(max - min, 1);
+                          const x = (idx / Math.max(wellnessTrend.length - 1, 1)) * 100;
+                          const y = 100 - ((point.score - min) / spread) * 100;
+                          return (
+                            <circle
+                              key={`${point.date}-${idx}`}
+                              cx={x}
+                              cy={y}
+                              r="2.2"
+                              fill="#1d4ed8"
+                            />
+                          );
+                        })}
+                      </svg>
+                      <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                        <span>{t.lower}</span>
+                        <span>{t.higher}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-3 rounded bg-slate-800 px-3 py-1 text-sm text-white"
+                        onClick={() => setIsWellnessDetailOpen((prev) => !prev)}
+                      >
+                        {isWellnessDetailOpen ? t.hideDetailView : t.openDetailView}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-600">{t.notEnoughTrendData}</p>
+                  )}
+                </article>
+                {isWellnessDetailOpen && wellnessTrend.length > 1 && (
+                  <article className="rounded bg-white p-4 shadow md:col-span-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-lg font-semibold">{t.wellnessDetails}</h3>
+                      <p className="text-xs text-slate-600">{t.clickPointsForDayDetails}</p>
+                    </div>
+                    <svg
+                      viewBox="0 0 100 100"
+                      className="mt-3 h-52 w-full rounded bg-slate-100 p-2"
+                    >
                       <polyline
                         fill="none"
                         stroke="#2563eb"
-                        strokeWidth="3"
-                        points={formatTrendPoints(wellnessTrend)}
+                        strokeWidth="2.5"
+                        points={formatTrendPoints(wellnessTrend.map((point) => point.score))}
+                      />
+                      <polyline
+                        fill="none"
+                        stroke="#0f766e"
+                        strokeWidth="2"
+                        points={formatTrendPoints(
+                          wellnessTrend.map((point) => point.sleep_quality),
+                        )}
+                      />
+                      <polyline
+                        fill="none"
+                        stroke="#9333ea"
+                        strokeWidth="2"
+                        points={formatTrendPoints(
+                          wellnessTrend.map((point) => point.mental_energy),
+                        )}
+                      />
+                      <polyline
+                        fill="none"
+                        stroke="#ea580c"
+                        strokeWidth="2"
+                        points={formatTrendPoints(wellnessTrend.map((point) => point.motivation))}
                       />
                     </svg>
-                  ) : (
-                    <p className="mt-2 text-sm text-slate-600">Noch nicht genug Eintraege fuer eine Trendanzeige.</p>
-                  )}
-                </article>
+                    <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                      <span className="rounded bg-blue-100 px-2 py-1 text-blue-800">
+                        {t.avgBlue}
+                      </span>
+                      <span className="rounded bg-teal-100 px-2 py-1 text-teal-800">
+                        {t.greenSleep}
+                      </span>
+                      <span className="rounded bg-purple-100 px-2 py-1 text-purple-800">
+                        {t.purpleMental}
+                      </span>
+                      <span className="rounded bg-orange-100 px-2 py-1 text-orange-800">
+                        {t.orangeMotivation}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-2 md:grid-cols-7">
+                      {wellnessTrend.map((point, idx) => (
+                        <button
+                          key={`detail-${point.date}`}
+                          type="button"
+                          onClick={() => setSelectedTrendIndex(idx)}
+                          className={`rounded border px-2 py-2 text-left text-xs ${
+                            selectedTrendIndex === idx
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <p className="font-medium">{formatShortDate(point.date, locale)}</p>
+                          <p>
+                            {t.avg}: {point.score}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedTrendPoint && (
+                      <div className="mt-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm">
+                        <p className="font-semibold">
+                          {t.detailsFor} {selectedTrendPoint.date}
+                        </p>
+                        <p className="mt-1">
+                          {t.sleepQuality} {selectedTrendPoint.sleep_quality}, {t.mentalEnergy}{" "}
+                          {selectedTrendPoint.mental_energy}, {t.motivationLabel}{" "}
+                          {selectedTrendPoint.motivation}, {t.avg} {selectedTrendPoint.score}.
+                        </p>
+                      </div>
+                    )}
+                  </article>
+                )}
                 <article className="rounded bg-white p-4 shadow md:col-span-2">
-                  <h3 className="text-lg font-semibold">Letzte Eintraege</h3>
+                  <h3 className="text-lg font-semibold">{t.latestEntries}</h3>
                   <div className="mt-3 grid gap-4 md:grid-cols-2">
                     <div>
-                      <p className="font-medium">Wellness</p>
+                      <p className="font-medium">{t.wellness}</p>
                       <ul className="mt-2 text-sm text-slate-700">
                         {wellness.slice(0, 3).map((entry) => (
-                          <li key={entry.id}>{entry.date}: Schlaf {entry.sleep_hours}h, Energie {entry.mental_energy}</li>
+                          <li key={entry.id}>
+                            {entry.date}: {t.sleep} {formatSleepHours(entry.sleep_hours)}h,{" "}
+                            {t.energy} {entry.mental_energy}
+                          </li>
                         ))}
                       </ul>
                     </div>
                     <div>
-                      <p className="font-medium">Zyklus</p>
+                      <p className="font-medium">{t.cycle}</p>
                       <ul className="mt-2 text-sm text-slate-700">
                         {cycle.slice(0, 3).map((entry) => (
-                          <li key={entry.id}>{entry.date}: Tag {entry.cycle_day}, Phase {entry.phase}</li>
+                          <li key={entry.id}>
+                            {entry.date}: {t.day} {entry.cycle_day}, {t.phase} {entry.phase}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -508,20 +967,25 @@ function App() {
             )}
 
             {user.role === "player" && tab === "wellness" && (
-              <form className="space-y-3 rounded bg-white p-6 shadow" onSubmit={handleWellnessSubmit}>
-                <h3 className="text-lg font-semibold">Wellness-Check</h3>
+              <form
+                className="space-y-3 rounded bg-white p-6 shadow"
+                onSubmit={handleWellnessSubmit}
+              >
+                <h3 className="text-lg font-semibold">{t.wellnessCheck}</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="text-sm">
-                    Datum
+                    {t.date}
                     <input
                       className="mt-1 w-full rounded border px-3 py-2"
                       type="date"
                       value={wellnessForm.date}
-                      onChange={(event) => setWellnessForm((prev) => ({ ...prev, date: event.target.value }))}
+                      onChange={(event) =>
+                        setWellnessForm((prev) => ({ ...prev, date: event.target.value }))
+                      }
                     />
                   </label>
                   <label className="text-sm">
-                    Schlafstunden
+                    {t.sleepHours}
                     <input
                       className="mt-1 w-full rounded border px-3 py-2"
                       type="number"
@@ -530,25 +994,32 @@ function App() {
                       step={0.5}
                       value={wellnessForm.sleep_hours}
                       onChange={(event) =>
-                        setWellnessForm((prev) => ({ ...prev, sleep_hours: Number(event.target.value) }))
+                        setWellnessForm((prev) => ({
+                          ...prev,
+                          sleep_hours: Number(event.target.value),
+                        }))
                       }
                     />
                   </label>
                   {[
-                    { key: "sleep_quality", label: "Schlafqualitaet" },
-                    { key: "muscle_soreness", label: "Muskelkater" },
-                    { key: "mental_energy", label: "Mentale Energie" },
-                    { key: "stress_level", label: "Stress" },
-                    { key: "motivation", label: "Motivation" },
-                    { key: "rpe_previous_day", label: "RPE Vortag" },
+                    { key: "sleep_quality", label: t.sleepQuality },
+                    { key: "muscle_soreness", label: t.muscleSoreness },
+                    { key: "mental_energy", label: t.mentalEnergy },
+                    { key: "stress_level", label: t.stress },
+                    { key: "motivation", label: t.motivationLabel },
+                    { key: "rpe_previous_day", label: t.rpePreviousDay },
                   ].map((item) => (
                     <label key={item.key} className="text-sm">
-                      {item.label} (1-10)
+                      {item.label} (0-10):{" "}
+                      <span className="font-semibold">
+                        {wellnessForm[item.key as keyof typeof wellnessForm]}
+                      </span>
                       <input
-                        className="mt-1 w-full rounded border px-3 py-2"
-                        type="number"
-                        min={1}
+                        className="mt-1 w-full"
+                        type="range"
+                        min={0}
                         max={10}
+                        step={1}
                         value={wellnessForm[item.key as keyof typeof wellnessForm]}
                         onChange={(event) =>
                           setWellnessForm((prev) => ({
@@ -561,46 +1032,56 @@ function App() {
                   ))}
                 </div>
                 <label className="block text-sm">
-                  Notiz
+                  {t.note}
                   <textarea
                     className="mt-1 w-full rounded border px-3 py-2"
                     rows={3}
                     value={wellnessForm.free_text}
-                    onChange={(event) => setWellnessForm((prev) => ({ ...prev, free_text: event.target.value }))}
+                    onChange={(event) =>
+                      setWellnessForm((prev) => ({ ...prev, free_text: event.target.value }))
+                    }
                   />
                 </label>
-                <button className="rounded bg-blue-600 px-4 py-2 text-white" type="submit">
-                  Wellness speichern
+                <button
+                  className="rounded bg-blue-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-70"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {isLoading ? t.saving : t.saveWellness}
                 </button>
               </form>
             )}
 
             {user.role === "player" && tab === "cycle" && (
               <form className="space-y-3 rounded bg-white p-6 shadow" onSubmit={handleCycleSubmit}>
-                <h3 className="text-lg font-semibold">Zyklus-Tracking</h3>
+                <h3 className="text-lg font-semibold">{t.cycleTracking}</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="text-sm">
-                    Datum
+                    {t.date}
                     <input
                       className="mt-1 w-full rounded border px-3 py-2"
                       type="date"
                       value={cycleForm.date}
-                      onChange={(event) => setCycleForm((prev) => ({ ...prev, date: event.target.value }))}
+                      onChange={(event) =>
+                        setCycleForm((prev) => ({ ...prev, date: event.target.value }))
+                      }
                     />
                   </label>
                   <label className="text-sm">
-                    Zyklustag
+                    {t.cycleDay}
                     <input
                       className="mt-1 w-full rounded border px-3 py-2"
                       type="number"
                       min={1}
                       max={60}
                       value={cycleForm.cycle_day}
-                      onChange={(event) => setCycleForm((prev) => ({ ...prev, cycle_day: Number(event.target.value) }))}
+                      onChange={(event) =>
+                        setCycleForm((prev) => ({ ...prev, cycle_day: Number(event.target.value) }))
+                      }
                     />
                   </label>
                   <label className="text-sm">
-                    Zykluslaenge
+                    {t.cycleLength}
                     <input
                       className="mt-1 w-full rounded border px-3 py-2"
                       type="number"
@@ -608,43 +1089,56 @@ function App() {
                       max={45}
                       value={cycleForm.cycle_length}
                       onChange={(event) =>
-                        setCycleForm((prev) => ({ ...prev, cycle_length: Number(event.target.value) }))
+                        setCycleForm((prev) => ({
+                          ...prev,
+                          cycle_length: Number(event.target.value),
+                        }))
                       }
                     />
                   </label>
                   <label className="text-sm">
-                    Phase
+                    {t.phase}
                     <select
                       className="mt-1 w-full rounded border px-3 py-2"
                       value={cycleForm.phase}
                       onChange={(event) =>
-                        setCycleForm((prev) => ({ ...prev, phase: event.target.value as CycleEntry["phase"] }))
+                        setCycleForm((prev) => ({
+                          ...prev,
+                          phase: event.target.value as CycleEntry["phase"],
+                        }))
                       }
                     >
-                      <option value="menstruation">Menstruation</option>
-                      <option value="follicular">Follikular</option>
-                      <option value="ovulation">Ovulation</option>
-                      <option value="luteal">Luteal</option>
+                      <option value="menstruation">{t.phaseMenstruation}</option>
+                      <option value="follicular">{t.phaseFollicular}</option>
+                      <option value="ovulation">{t.phaseOvulation}</option>
+                      <option value="luteal">{t.phaseLuteal}</option>
                     </select>
                   </label>
                   <label className="text-sm">
-                    PMS-Score (0-10)
+                    {t.pmsScore} (0-10):{" "}
+                    <span className="font-semibold">{cycleForm.pms_score}</span>
                     <input
-                      className="mt-1 w-full rounded border px-3 py-2"
-                      type="number"
+                      className="mt-1 w-full"
+                      type="range"
                       min={0}
                       max={10}
+                      step={1}
                       value={cycleForm.pms_score}
-                      onChange={(event) => setCycleForm((prev) => ({ ...prev, pms_score: Number(event.target.value) }))}
+                      onChange={(event) =>
+                        setCycleForm((prev) => ({ ...prev, pms_score: Number(event.target.value) }))
+                      }
                     />
                   </label>
                   <label className="text-sm">
-                    Verhuetung
+                    {t.contraception}
                     <input
                       className="mt-1 w-full rounded border px-3 py-2"
                       value={cycleForm.contraception_type}
                       onChange={(event) =>
-                        setCycleForm((prev) => ({ ...prev, contraception_type: event.target.value }))
+                        setCycleForm((prev) => ({
+                          ...prev,
+                          contraception_type: event.target.value,
+                        }))
                       }
                     />
                   </label>
@@ -655,54 +1149,68 @@ function App() {
                       type="checkbox"
                       className="mr-2"
                       checked={cycleForm.cramps}
-                      onChange={(event) => setCycleForm((prev) => ({ ...prev, cramps: event.target.checked }))}
+                      onChange={(event) =>
+                        setCycleForm((prev) => ({ ...prev, cramps: event.target.checked }))
+                      }
                     />
-                    Kraempfe
+                    {t.cramps}
                   </label>
                   <label>
                     <input
                       type="checkbox"
                       className="mr-2"
                       checked={cycleForm.migraine}
-                      onChange={(event) => setCycleForm((prev) => ({ ...prev, migraine: event.target.checked }))}
+                      onChange={(event) =>
+                        setCycleForm((prev) => ({ ...prev, migraine: event.target.checked }))
+                      }
                     />
-                    Migraene
+                    {t.migraine}
                   </label>
                   <label>
                     <input
                       type="checkbox"
                       className="mr-2"
                       checked={cycleForm.fatigue}
-                      onChange={(event) => setCycleForm((prev) => ({ ...prev, fatigue: event.target.checked }))}
+                      onChange={(event) =>
+                        setCycleForm((prev) => ({ ...prev, fatigue: event.target.checked }))
+                      }
                     />
-                    Muedigkeit
+                    {t.fatigue}
                   </label>
                 </div>
                 <label className="block text-sm">
-                  Notiz
+                  {t.note}
                   <textarea
                     className="mt-1 w-full rounded border px-3 py-2"
                     rows={3}
                     value={cycleForm.notes}
-                    onChange={(event) => setCycleForm((prev) => ({ ...prev, notes: event.target.value }))}
+                    onChange={(event) =>
+                      setCycleForm((prev) => ({ ...prev, notes: event.target.value }))
+                    }
                   />
                 </label>
-                <button className="rounded bg-blue-600 px-4 py-2 text-white" type="submit">
-                  Zyklus speichern
+                <button
+                  className="rounded bg-blue-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-70"
+                  type="submit"
+                  disabled={isLoading}
+                >
+                  {isLoading ? t.saving : t.saveCycle}
                 </button>
               </form>
             )}
 
             {user.role === "player" && tab === "privacy" && (
               <section className="rounded bg-white p-6 shadow">
-                <h3 className="text-lg font-semibold">Privacy-Settings</h3>
+                <h3 className="text-lg font-semibold">{t.privacySettings}</h3>
                 {consents.length === 0 ? (
-                  <p className="mt-3 text-sm text-slate-600">Keine Coach-Freigaben vorhanden.</p>
+                  <p className="mt-3 text-sm text-slate-600">{t.noConsents}</p>
                 ) : (
                   <div className="mt-3 space-y-3">
                     {consents.map((consent) => (
                       <article key={consent.id} className="rounded border p-3">
-                        <p className="mb-2 font-medium">Coach ID: {consent.coach_id}</p>
+                        <p className="mb-2 font-medium">
+                          {t.coach}: {consent.coach_name ?? `ID ${consent.coach_id}`}
+                        </p>
                         <div className="flex flex-wrap gap-4 text-sm">
                           <label>
                             <input
@@ -712,12 +1220,14 @@ function App() {
                               onChange={(event) =>
                                 setConsents((prev) =>
                                   prev.map((item) =>
-                                    item.id === consent.id ? { ...item, share_wellness_data: event.target.checked } : item,
+                                    item.id === consent.id
+                                      ? { ...item, share_wellness_data: event.target.checked }
+                                      : item,
                                   ),
                                 )
                               }
                             />
-                            Wellness teilen
+                            {t.shareWellness}
                           </label>
                           <label>
                             <input
@@ -727,19 +1237,21 @@ function App() {
                               onChange={(event) =>
                                 setConsents((prev) =>
                                   prev.map((item) =>
-                                    item.id === consent.id ? { ...item, share_cycle_data: event.target.checked } : item,
+                                    item.id === consent.id
+                                      ? { ...item, share_cycle_data: event.target.checked }
+                                      : item,
                                   ),
                                 )
                               }
                             />
-                            Zyklus teilen
+                            {t.shareCycle}
                           </label>
                           <button
                             className="rounded bg-slate-800 px-3 py-1 text-white"
                             type="button"
                             onClick={() => void handlePrivacySave(consent)}
                           >
-                            Speichern
+                            {t.save}
                           </button>
                         </div>
                       </article>
@@ -751,9 +1263,9 @@ function App() {
 
             {user.role === "coach" && tab === "team" && (
               <section className="rounded bg-white p-6 shadow">
-                <h3 className="text-lg font-semibold">Team-Uebersicht</h3>
+                <h3 className="text-lg font-semibold">{t.teamOverview}</h3>
                 {teamPredictions.length === 0 ? (
-                  <p className="mt-3 text-sm text-slate-600">Keine Spielerinnen mit Vorhersage gefunden.</p>
+                  <p className="mt-3 text-sm text-slate-600">{t.noPlayers}</p>
                 ) : (
                   <ul className="mt-3 space-y-2">
                     {[...teamPredictions]
@@ -764,12 +1276,17 @@ function App() {
                           className="flex flex-wrap items-center justify-between gap-2 rounded border p-3"
                         >
                           <div className="flex items-center gap-3">
-                            <span className={`h-4 w-4 rounded-full ${riskColor(item.risk_level)}`} />
-                            <p className="font-medium">Spielerin #{item.player_id}</p>
+                            <span
+                              className={`h-4 w-4 rounded-full ${riskColor(item.risk_level)}`}
+                            />
+                            <p className="font-medium">
+                              {t.player} #{item.player_id}
+                            </p>
                           </div>
                           <div className="flex items-center gap-3 text-sm">
                             <span>
-                              {(item.risk_score * 100).toFixed(1)}% - {item.risk_level.toUpperCase()}
+                              {(item.risk_score * 100).toFixed(1)}% -{" "}
+                              {item.risk_level.toUpperCase()}
                             </span>
                             <button
                               type="button"
@@ -779,7 +1296,7 @@ function App() {
                                 setTab("detail");
                               }}
                             >
-                              Detail
+                              {t.detail}
                             </button>
                           </div>
                         </li>
@@ -793,7 +1310,7 @@ function App() {
               <section className="space-y-4 rounded bg-white p-6 shadow">
                 <div className="flex flex-wrap items-end gap-3">
                   <div>
-                    <p className="text-sm text-slate-600">Spielerin waehlen</p>
+                    <p className="text-sm text-slate-600">{t.selectPlayer}</p>
                     <select
                       className="mt-1 rounded border px-3 py-2"
                       value={selectedPlayerId ?? ""}
@@ -801,7 +1318,7 @@ function App() {
                     >
                       {teamPredictions.map((item) => (
                         <option key={`sel-${item.player_id}`} value={item.player_id}>
-                          Spielerin #{item.player_id}
+                          {t.player} #{item.player_id}
                         </option>
                       ))}
                     </select>
@@ -811,22 +1328,22 @@ function App() {
                     className="rounded bg-blue-600 px-4 py-2 text-white"
                     onClick={() => void loadCoachPlayerDetail()}
                   >
-                    Aktualisieren
+                    {t.refresh}
                   </button>
                 </div>
 
                 <article className="rounded border p-4">
-                  <h4 className="font-semibold">Wellness-Verlauf</h4>
+                  <h4 className="font-semibold">{t.wellnessHistory}</h4>
                   {selectedPlayerWellnessBlocked ? (
-                    <p className="mt-2 text-sm text-amber-700">Wellnessdaten sind nicht freigegeben.</p>
+                    <p className="mt-2 text-sm text-amber-700">{t.wellnessBlocked}</p>
                   ) : selectedPlayerWellness.length === 0 ? (
-                    <p className="mt-2 text-sm text-slate-600">Keine Wellness-Daten vorhanden.</p>
+                    <p className="mt-2 text-sm text-slate-600">{t.noWellnessData}</p>
                   ) : (
                     <ul className="mt-2 space-y-1 text-sm">
                       {selectedPlayerWellness.slice(0, 7).map((entry) => (
                         <li key={entry.id}>
-                          {entry.date}: Energie {entry.mental_energy}, Motivation {entry.motivation}, Schlaf{" "}
-                          {entry.sleep_hours}h
+                          {entry.date}: {t.energy} {entry.mental_energy}, {t.motivationLabel}{" "}
+                          {entry.motivation}, {t.sleep} {formatSleepHours(entry.sleep_hours)}h
                         </li>
                       ))}
                     </ul>
@@ -834,14 +1351,14 @@ function App() {
                 </article>
 
                 <article className="rounded border p-4">
-                  <h4 className="font-semibold">Trainingsbelastung</h4>
+                  <h4 className="font-semibold">{t.trainingLoad}</h4>
                   {selectedPlayerTraining.length === 0 ? (
-                    <p className="mt-2 text-sm text-slate-600">Keine Trainingsdaten vorhanden.</p>
+                    <p className="mt-2 text-sm text-slate-600">{t.noTrainingData}</p>
                   ) : (
                     <ul className="mt-2 space-y-1 text-sm">
                       {selectedPlayerTraining.slice(0, 7).map((entry) => (
                         <li key={entry.id}>
-                          {entry.date}: {entry.duration_min} min bei Intensitaet {entry.intensity}
+                          {entry.date}: {entry.duration_min} {t.intensityAt} {entry.intensity}
                         </li>
                       ))}
                     </ul>
@@ -849,16 +1366,16 @@ function App() {
                 </article>
 
                 <article className="rounded border p-4">
-                  <h4 className="font-semibold">Zyklusdaten</h4>
+                  <h4 className="font-semibold">{t.cycleData}</h4>
                   {selectedPlayerCycleBlocked ? (
-                    <p className="mt-2 text-sm text-amber-700">Zyklusdaten sind nicht freigegeben.</p>
+                    <p className="mt-2 text-sm text-amber-700">{t.cycleBlocked}</p>
                   ) : selectedPlayerCycle.length === 0 ? (
-                    <p className="mt-2 text-sm text-slate-600">Keine Zyklusdaten vorhanden.</p>
+                    <p className="mt-2 text-sm text-slate-600">{t.noCycleData}</p>
                   ) : (
                     <ul className="mt-2 space-y-1 text-sm">
                       {selectedPlayerCycle.slice(0, 7).map((entry) => (
                         <li key={entry.id}>
-                          {entry.date}: Tag {entry.cycle_day}, Phase {entry.phase}
+                          {entry.date}: {t.day} {entry.cycle_day}, {t.phase} {entry.phase}
                         </li>
                       ))}
                     </ul>
@@ -866,10 +1383,8 @@ function App() {
                 </article>
 
                 <article className="rounded border p-4">
-                  <h4 className="font-semibold">Verletzungshistorie</h4>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Fuer Verletzungen existiert aktuell noch kein Coach-Read-Endpoint im Backend.
-                  </p>
+                  <h4 className="font-semibold">{t.injuryHistory}</h4>
+                  <p className="mt-2 text-sm text-slate-600">{t.noInjuryEndpoint}</p>
                 </article>
               </section>
             )}

@@ -1,11 +1,12 @@
 from collections.abc import Generator
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Team, User, UserRole
+from app.models import Team
 from app.routers import (
     auth_router,
     cycle_router,
@@ -15,7 +16,7 @@ from app.routers import (
     training_router,
     wellness_router,
 )
-from app.services.auth import hash_password, reset_auth_state
+from app.services.auth import reset_auth_state
 
 
 @pytest.fixture()
@@ -88,7 +89,9 @@ def team_and_users(db_session: Session, api_client: TestClient) -> dict:
     }
 
 
-def test_wellness_happy_path_and_coach_access_with_consent(api_client: TestClient, team_and_users: dict) -> None:
+def test_wellness_happy_path_and_coach_access_with_consent(
+    api_client: TestClient, team_and_users: dict
+) -> None:
     p = team_and_users
     headers = {"Authorization": f"Bearer {p['player_token']}"}
 
@@ -170,7 +173,9 @@ def test_wellness_validation_out_of_range(api_client: TestClient, team_and_users
     assert res.status_code == 422
 
 
-def test_wellness_coach_list_forbidden_without_player_role(api_client: TestClient, team_and_users: dict) -> None:
+def test_wellness_coach_list_forbidden_without_player_role(
+    api_client: TestClient, team_and_users: dict
+) -> None:
     p = team_and_users
     coach_headers = {"Authorization": f"Bearer {p['coach_token']}"}
     res = api_client.get("/api/wellness/", headers=coach_headers)
@@ -230,7 +235,9 @@ def test_training_coach_same_team(api_client: TestClient, team_and_users: dict) 
     assert len(team.json()) == 1
 
 
-def test_training_coach_different_team_forbidden(api_client: TestClient, db_session: Session) -> None:
+def test_training_coach_different_team_forbidden(
+    api_client: TestClient, db_session: Session
+) -> None:
     team_a = Team(name="Team A")
     team_b = Team(name="Team B")
     db_session.add_all([team_a, team_b])
@@ -290,7 +297,11 @@ def test_privacy_get_and_invalid_coach(api_client: TestClient, team_and_users: d
 
     empty = api_client.get("/api/privacy/consent", headers=player_headers)
     assert empty.status_code == 200
-    assert empty.json() == []
+    payload = empty.json()
+    assert len(payload) == 1
+    assert payload[0]["coach_id"] == p["coach_id"]
+    assert payload[0]["share_cycle_data"] is False
+    assert payload[0]["share_wellness_data"] is False
 
     bad = api_client.put(
         "/api/privacy/consent",
@@ -323,7 +334,9 @@ def test_privacy_upsert_updates(api_client: TestClient, team_and_users: dict) ->
     assert second.json()["share_wellness_data"] is True
 
 
-def test_predictions_player_can_read_own_prediction(api_client: TestClient, team_and_users: dict) -> None:
+def test_predictions_player_can_read_own_prediction(
+    api_client: TestClient, team_and_users: dict
+) -> None:
     p = team_and_users
     player_headers = {"Authorization": f"Bearer {p['player_token']}"}
     create_wellness = api_client.post(
@@ -357,7 +370,9 @@ def test_predictions_player_can_read_own_prediction(api_client: TestClient, team
     assert payload["risk_level"] in {"green", "yellow", "red"}
 
 
-def test_predictions_player_cannot_read_other_player(api_client: TestClient, db_session: Session) -> None:
+def test_predictions_player_cannot_read_other_player(
+    api_client: TestClient, db_session: Session
+) -> None:
     team = Team(name="Team Pred")
     db_session.add(team)
     db_session.commit()

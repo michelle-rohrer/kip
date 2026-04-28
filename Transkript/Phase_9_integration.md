@@ -1,5 +1,5 @@
 # Phase 9 integration and deployment tasks
-_Exported on 31.3.2026 at 10:59:01 MESZ from Cursor (2.6.22)_
+_Exported on 28.4.2026 at 12:25:45 MESZ from Cursor (3.2.11)_
 
 ---
 
@@ -125,4 +125,10 @@ Ich habe deshalb:
   - `.env.example`
   - E2E-Test `backend/tests/test_e2e_flow.py`
   - Start- und Testbefehle.
+
+---
+
+**User**
+
+@vscode.git.Git:454-456 
 

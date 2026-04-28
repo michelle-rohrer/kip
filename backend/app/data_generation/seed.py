@@ -45,24 +45,27 @@ def seed_database(
         _delete_synthetic_users(session, cfg.team_name)
 
     rng = np.random.default_rng(cfg.random_seed)
-    team, coach, players, cycle_rows, wellness_rows, training_rows, injury_rows = build_synthetic_dataset(
-        rng=rng,
-        end_date=end_date,
-        config=cfg,
+    team, coaches, players, cycle_rows, wellness_rows, training_rows, injury_rows = (
+        build_synthetic_dataset(
+            rng=rng,
+            end_date=end_date,
+            config=cfg,
+        )
     )
 
     session.add(team)
     session.flush()
 
-    coach.team_id = team.id
+    for coach in coaches:
+        coach.team_id = team.id
     for p in players:
         p.team_id = team.id
 
-    session.add(coach)
+    session.add_all(coaches)
     session.add_all(players)
     session.flush()
 
-    session.add_all(build_privacy_consents(coach=coach, players=players, rng=rng))
+    session.add_all(build_privacy_consents(coaches=coaches, players=players, rng=rng))
     session.add_all(cycle_rows)
     session.add_all(wellness_rows)
     session.add_all(training_rows)
@@ -77,9 +80,18 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Do not delete existing synthetic@kip.local users first (may fail on duplicate emails).",
     )
-    parser.add_argument("--seed", type=int, default=None, help="Override random seed (default: config 42).")
-    parser.add_argument("--players", type=int, default=None, help="Number of synthetic players (15–20).")
-    parser.add_argument("--end-date", type=str, default=None, help="Last day of history (YYYY-MM-DD). Default: today.")
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Override random seed (default: config 42)."
+    )
+    parser.add_argument(
+        "--players", type=int, default=None, help="Number of synthetic players (15–20)."
+    )
+    parser.add_argument(
+        "--end-date",
+        type=str,
+        default=None,
+        help="Last day of history (YYYY-MM-DD). Default: today.",
+    )
     args = parser.parse_args(argv)
 
     cfg = SyntheticDatasetConfig()

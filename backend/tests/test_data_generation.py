@@ -11,12 +11,13 @@ from app.models import CycleEntry, InjuryEntry, PrivacyConsent, Team, User, Well
 def test_build_synthetic_dataset_produces_expected_entities():
     rng = np.random.default_rng(0)
     cfg = SyntheticDatasetConfig(num_players=15, days_min=14, days_max=14, random_seed=0)
-    team, coach, players, cycles, wellness, training, injuries = build_synthetic_dataset(
+    team, coaches, players, cycles, wellness, training, injuries = build_synthetic_dataset(
         rng=rng, config=cfg, end_date=date(2026, 1, 31)
     )
 
     assert team.name == cfg.team_name
-    assert coach.email == cfg.coach_email
+    assert len(coaches) == 2
+    assert {coach.email for coach in coaches} == {cfg.headcoach_email, cfg.athletikcoach_email}
     assert len(players) == 15
     assert len(cycles) == 15 * 14
     assert len(wellness) == 15 * 14
@@ -31,15 +32,15 @@ def test_seed_database_persists_and_replace_clears_previous(db_session):
     seed_database(session=db_session, config=cfg, replace=True, end_date=date(2026, 2, 1))
 
     n_users = db_session.scalar(select(func.count()).select_from(User))
-    assert n_users == 16
+    assert n_users == 17
 
     n_team = db_session.scalar(select(func.count()).select_from(Team))
     assert n_team == 1
 
     assert db_session.scalar(select(func.count()).select_from(CycleEntry)) == 150
     assert db_session.scalar(select(func.count()).select_from(WellnessEntry)) == 150
-    assert db_session.scalar(select(func.count()).select_from(PrivacyConsent)) == 15
+    assert db_session.scalar(select(func.count()).select_from(PrivacyConsent)) == 30
 
     seed_database(session=db_session, config=cfg, replace=True, end_date=date(2026, 2, 1))
-    assert db_session.scalar(select(func.count()).select_from(User)) == 16
+    assert db_session.scalar(select(func.count()).select_from(User)) == 17
     assert db_session.scalar(select(func.count()).select_from(InjuryEntry)) >= 0

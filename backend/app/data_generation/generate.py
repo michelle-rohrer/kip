@@ -67,24 +67,34 @@ class SyntheticDatasetConfig:
     days_min: int = 90
     days_max: int = 180
     team_name: str = "Synthetic Team KIP"
-    coach_email: str = "synthetic.coach@kip.local"
-    coach_name: str = "Synthetic Coach"
+    headcoach_email: str = "synthetic.headcoach@kip.local"
+    headcoach_name: str = "Headcoach"
+    athletikcoach_email: str = "synthetic.athletiktrainerin@kip.local"
+    athletikcoach_name: str = "Athletiktrainerin"
     coach_password: str = "synthetic-seed-password"
     player_password: str = "synthetic-seed-password"
     random_seed: int | None = 42
 
 
-def build_privacy_consents(*, coach: User, players: Sequence[User], rng: np.random.Generator) -> list[PrivacyConsent]:
-    """Create one consent row per player for the synthetic coach."""
-    return [
-        PrivacyConsent(
-            player=p,
-            coach=coach,
-            share_cycle_data=bool(rng.random() < 0.72),
-            share_wellness_data=bool(rng.random() < 0.78),
-        )
-        for p in players
-    ]
+def build_privacy_consents(
+    *,
+    coaches: Sequence[User],
+    players: Sequence[User],
+    rng: np.random.Generator,
+) -> list[PrivacyConsent]:
+    """Create one consent row per player and synthetic coach."""
+    rows: list[PrivacyConsent] = []
+    for coach in coaches:
+        for player in players:
+            rows.append(
+                PrivacyConsent(
+                    player=player,
+                    coach=coach,
+                    share_cycle_data=bool(rng.random() < 0.72),
+                    share_wellness_data=bool(rng.random() < 0.78),
+                )
+            )
+    return rows
 
 
 def build_synthetic_dataset(
@@ -92,7 +102,15 @@ def build_synthetic_dataset(
     rng: np.random.Generator,
     end_date: date | None = None,
     config: SyntheticDatasetConfig | None = None,
-) -> tuple[Team, User, list[User], list[CycleEntry], list[WellnessEntry], list[TrainingEntry], list[InjuryEntry]]:
+) -> tuple[
+    Team,
+    list[User],
+    list[User],
+    list[CycleEntry],
+    list[WellnessEntry],
+    list[TrainingEntry],
+    list[InjuryEntry],
+]:
     """Build in-memory model instances (not persisted)."""
     cfg = config or SyntheticDatasetConfig()
     if end_date is None:
@@ -101,13 +119,22 @@ def build_synthetic_dataset(
     n_players = int(np.clip(cfg.num_players, 15, 20))
     team = Team(name=cfg.team_name)
     coach_pw = hash_password(cfg.coach_password)
-    coach = User(
-        email=cfg.coach_email,
-        password_hash=coach_pw,
-        role=UserRole.COACH,
-        team_id=None,
-        name=cfg.coach_name,
-    )
+    coaches = [
+        User(
+            email=cfg.headcoach_email,
+            password_hash=coach_pw,
+            role=UserRole.COACH,
+            team_id=None,
+            name=cfg.headcoach_name,
+        ),
+        User(
+            email=cfg.athletikcoach_email,
+            password_hash=coach_pw,
+            role=UserRole.COACH,
+            team_id=None,
+            name=cfg.athletikcoach_name,
+        ),
+    ]
 
     players: list[User] = []
     for i in range(n_players):
@@ -127,7 +154,9 @@ def build_synthetic_dataset(
     injury_rows: list[InjuryEntry] = []
 
     for p_idx, player in enumerate(players):
-        player_rng = np.random.default_rng((int(rng.integers(0, 2**31)) ^ (p_idx * 100_003)) & 0x7FFFFFFF)
+        player_rng = np.random.default_rng(
+            (int(rng.integers(0, 2**31)) ^ (p_idx * 100_003)) & 0x7FFFFFFF
+        )
         n_days = int(player_rng.integers(cfg.days_min, cfg.days_max + 1))
         start_date = end_date - timedelta(days=n_days - 1)
 
@@ -227,7 +256,9 @@ def build_synthetic_dataset(
                 np.clip(player_rng.normal(7.2 + (sleep_quality - 6) * 0.15, 0.85), 4.5, 10.5)
             )
 
-            mental_energy = _clip_int(0.55 * sleep_quality + 2.8 + player_rng.normal(0, 1.15), 1, 10)
+            mental_energy = _clip_int(
+                0.55 * sleep_quality + 2.8 + player_rng.normal(0, 1.15), 1, 10
+            )
 
             muscle_soreness = _clip_int(
                 2.5
@@ -301,4 +332,4 @@ def build_synthetic_dataset(
                     )
                 )
 
-    return team, coach, players, cycle_rows, wellness_rows, training_rows, injury_rows
+    return team, coaches, players, cycle_rows, wellness_rows, training_rows, injury_rows

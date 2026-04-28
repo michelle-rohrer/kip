@@ -89,7 +89,15 @@ def build_player_feature_frame(
     if df_wellness.empty and df_train.empty and df_cycle.empty:
         return pd.DataFrame()
 
-    base_dates = pd.DataFrame({"date": sorted(set(df_wellness.get("date", [])) | set(df_train.get("date", [])) | set(df_cycle.get("date", [])))})
+    base_dates = pd.DataFrame(
+        {
+            "date": sorted(
+                set(df_wellness.get("date", []))
+                | set(df_train.get("date", []))
+                | set(df_cycle.get("date", []))
+            )
+        }
+    )
     df = base_dates.copy()
     if not df_train.empty:
         df = df.merge(df_train, on="date", how="left")
@@ -128,14 +136,23 @@ def build_player_feature_frame(
     chronic = df["daily_load"].rolling(window=cfg.chronic_window_days, min_periods=1).mean()
     df["acwr"] = _safe_div(acute, chronic)
 
-    for col in ["sleep_quality", "muscle_soreness", "mental_energy", "stress_level", "motivation", "daily_load"]:
+    for col in [
+        "sleep_quality",
+        "muscle_soreness",
+        "mental_energy",
+        "stress_level",
+        "motivation",
+        "daily_load",
+    ]:
         df[f"{col}_ma3"] = df[col].rolling(window=3, min_periods=1).mean()
         df[f"{col}_ma7"] = df[col].rolling(window=7, min_periods=1).mean()
         df[f"{col}_delta"] = df[col] - df[col].shift(1).fillna(df[col])
 
     df["phase_intensity_interaction"] = df["intensity"] * (df["phase"] == "luteal").astype(int)
     df["sleep_energy_interaction"] = df["sleep_hours"] * df["mental_energy"]
-    df["symptom_score"] = df["pms_score"] + (df["cramps"] * 2) + (df["migraine"] * 2) + df["fatigue_flag"]
+    df["symptom_score"] = (
+        df["pms_score"] + (df["cramps"] * 2) + (df["migraine"] * 2) + df["fatigue_flag"]
+    )
 
     phase_dummies = pd.get_dummies(df["phase"], prefix="phase")
     df = pd.concat([df, phase_dummies], axis=1)

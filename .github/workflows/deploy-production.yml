@@ -1,0 +1,34 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Trigger production deploy hooks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger backend production deploy
+        if: ${{ secrets.PRODUCTION_BACKEND_DEPLOY_HOOK_URL != '' }}
+        env:
+          HOOK_URL: ${{ secrets.PRODUCTION_BACKEND_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$HOOK_URL"
+
+      - name: Trigger frontend production deploy
+        if: ${{ secrets.PRODUCTION_FRONTEND_DEPLOY_HOOK_URL != '' }}
+        env:
+          HOOK_URL: ${{ secrets.PRODUCTION_FRONTEND_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$HOOK_URL"
+
+      - name: Verify deployment hooks configured
+        env:
+          BACKEND_HOOK: ${{ secrets.PRODUCTION_BACKEND_DEPLOY_HOOK_URL }}
+          FRONTEND_HOOK: ${{ secrets.PRODUCTION_FRONTEND_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$BACKEND_HOOK" ] || [ -z "$FRONTEND_HOOK" ]; then
+            echo "Missing production deploy hook secrets."
+            echo "Set PRODUCTION_BACKEND_DEPLOY_HOOK_URL and PRODUCTION_FRONTEND_DEPLOY_HOOK_URL in GitHub repository secrets."
+            exit 1
+          fi

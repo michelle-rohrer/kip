@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies import get_current_user
-from app.models import User
+from app.models import User, UserRole
 from app.schemas import (
     MessageResponse,
     RefreshTokenRequest,
@@ -27,15 +27,20 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, request: Request, db: Session = Depends(get_db)) -> User:
     ip = request.client.host if request.client else "unknown"
-    check_auth_rate_limit(action="register", key=f"{ip}:{payload.email}")
+    check_auth_rate_limit(action="register", key=f"{ip}:{payload.username}")
+    if payload.role == UserRole.COACH:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coach registration is disabled",
+        )
     return register_user(db, payload)
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)) -> TokenResponse:
     ip = request.client.host if request.client else "unknown"
-    check_auth_rate_limit(action="login", key=f"{ip}:{payload.email}")
-    user = authenticate_user(db, email=payload.email, password=payload.password)
+    check_auth_rate_limit(action="login", key=f"{ip}:{payload.username}")
+    user = authenticate_user(db, username=payload.username, password=payload.password)
     access_token, refresh_token = issue_tokens(user)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 

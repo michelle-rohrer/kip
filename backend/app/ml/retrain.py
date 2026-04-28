@@ -29,6 +29,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Disable fallback to mixed synthetic+real training before enough real rows exist.",
     )
+    parser.add_argument(
+        "--min-positive-rows",
+        type=int,
+        default=20,
+        help="Minimum number of positive (overload/injury) labeled rows required for training.",
+    )
     args = parser.parse_args(argv)
 
     db = SessionLocal()
@@ -36,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
         metrics = train_random_forest(
             db,
             min_real_rows=max(args.min_real_rows, 50),
+            min_positive_rows=max(args.min_positive_rows, 5),
             allow_synthetic_bootstrap=not args.no_synthetic_bootstrap,
         )
     except Exception as exc:  # noqa: BLE001 - CLI output for operators
@@ -45,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
             context={
                 "runner": "manual_cli",
                 "min_real_rows": max(args.min_real_rows, 50),
+                "min_positive_rows": max(args.min_positive_rows, 5),
                 "allow_synthetic_bootstrap": not args.no_synthetic_bootstrap,
             },
         )

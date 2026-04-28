@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -8,8 +9,9 @@ from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import User
+from app.models import Team, User, UserRole
 from app.schemas import UserCreate
+from app.schemas.auth import PLAYER_POSITIONS
 
 JWT_DEFAULT_SECRET = "dev-secret-change-me"
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", JWT_DEFAULT_SECRET)
@@ -45,7 +47,7 @@ def _create_token(*, user: User, token_type: str, expires_delta: timedelta) -> s
     jti = uuid4().hex
     payload = {
         "sub": str(user.id),
-        "email": user.email,
+        "username": user.username,
         "role": user.role.value,
         "type": token_type,
         "jti": jti,
@@ -93,17 +95,45 @@ def decode_token(token: str, *, expected_type: str | None = None) -> dict:
 
 
 def register_user(db: Session, user_in: UserCreate) -> User:
-    existing_user = db.execute(select(User).where(User.email == user_in.email)).scalar_one_or_none()
+    existing_user = db.execute(select(User).where(User.username == user_in.username)).scalar_one_or_none()
     if existing_user is not None:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered"
         )
+    if user_in.email:
+        existing_email = db.execute(select(User).where(User.email == user_in.email)).scalar_one_or_none()
+        if existing_email is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+            )
+
+    team_id = user_in.team_id
+    if user_in.role == UserRole.PLAYER and team_id is None:
+        preferred_team_names = ("BTV Aarau F1", "Eaglets NNV")
+        preferred_teams = db.execute(
+            select(Team).where(Team.name.in_(preferred_team_names))
+        ).scalars().all()
+        available_teams = preferred_teams or db.execute(select(Team)).scalars().all()
+        if available_teams:
+            team_id = secrets.choice(available_teams).id
+
+    training_uid: str | None = None
+    if user_in.role == UserRole.PLAYER:
+        training_uid = uuid4().hex
+        if user_in.player_position and user_in.player_position not in PLAYER_POSITIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid player position",
+            )
 
     user = User(
+        username=user_in.username,
         email=user_in.email,
         password_hash=hash_password(user_in.password),
         role=user_in.role,
-        team_id=user_in.team_id,
+        team_id=team_id,
+        training_uid=training_uid,
+        player_position=user_in.player_position,
         name=user_in.name,
     )
     db.add(user)
@@ -112,11 +142,11 @@ def register_user(db: Session, user_in: UserCreate) -> User:
     return user
 
 
-def authenticate_user(db: Session, *, email: str, password: str) -> User:
-    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+def authenticate_user(db: Session, *, username: str, password: str) -> User:
+    user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
     if user is None or not verify_password(password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password"
         )
     return user
 

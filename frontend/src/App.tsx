@@ -1,12 +1,15 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import volleySyncIcon from "./assets/volleysync-icon.svg";
+import volleySyncIcon from "./assets/app_icon.png";
 import { LANGUAGE_KEY, LOCALES, TEXT, Language } from "./i18n";
 
 type User = {
   id: number;
-  email: string;
+  username: string;
+  email: string | null;
   role: "player" | "coach";
   team_id: number | null;
+  training_uid: string | null;
+  player_position: string | null;
   name: string;
 };
 
@@ -14,6 +17,11 @@ type TokenResponse = {
   access_token: string;
   refresh_token: string;
   token_type: string;
+};
+
+type TeamOption = {
+  id: number;
+  name: string;
 };
 
 type WellnessEntry = {
@@ -27,6 +35,18 @@ type WellnessEntry = {
   motivation: number;
   rpe_previous_day: number | null;
   free_text: string | null;
+};
+
+type InjuryEntry = {
+  id: number;
+  player_id: number;
+  date: string;
+  body_location: string;
+  pain_intensity: number;
+  is_chronic: boolean;
+  medical_attention: boolean;
+  time_loss_days: number;
+  description: string | null;
 };
 
 type CycleEntry = {
@@ -54,11 +74,21 @@ type PrivacyConsent = {
 type Prediction = {
   id?: number;
   player_id?: number;
+  player_name?: string | null;
   date?: string;
   risk_score: number;
   risk_level: "green" | "yellow" | "red";
   model_version: string;
   features_used?: Record<string, unknown>;
+  player_position?: string | null;
+  latest_training_date?: string | null;
+  latest_session_rpe?: number | null;
+  latest_session_type?: string | null;
+  latest_participation_status?: string | null;
+  latest_injury_date?: string | null;
+  latest_pain_intensity?: number | null;
+  latest_medical_attention?: boolean | null;
+  latest_time_loss_days?: number | null;
 };
 
 type ModelTrainingStatus = {
@@ -75,7 +105,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 const ACCESS_TOKEN_KEY = "kip_access_token";
 const REFRESH_TOKEN_KEY = "kip_refresh_token";
 
-type PlayerTab = "dashboard" | "wellness" | "cycle" | "privacy";
+type PlayerTab = "dashboard" | "wellness" | "cycle" | "training" | "injury" | "privacy";
 type CoachTab = "team" | "detail";
 type AppTab = PlayerTab | CoachTab;
 
@@ -85,6 +115,9 @@ type TrainingEntry = {
   duration_min: number;
   intensity: number;
   jump_count: number | null;
+  session_rpe: number | null;
+  session_type: string | null;
+  participation_status: string | null;
 };
 
 async function apiRequest<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
@@ -131,7 +164,7 @@ function formatTrendPoints(values: number[]) {
 }
 
 function formatSleepHours(hours: number) {
-  return (Math.round(hours * 10) / 10).toFixed(1);
+  return hours.toFixed(1);
 }
 
 function formatShortDate(isoDate: string, locale: string) {
@@ -149,6 +182,34 @@ function formatDateTime(value: string | null | undefined, locale: string) {
   return date.toLocaleString(locale);
 }
 
+function mapPositionLabel(position: string | null | undefined, t: Record<string, string>) {
+  if (!position) return "-";
+  if (position === "setter") return t.posSetter;
+  if (position === "outside_hitter") return t.posOutsideHitter;
+  if (position === "opposite") return t.posOpposite;
+  if (position === "middle_blocker") return t.posMiddleBlocker;
+  if (position === "libero") return t.posLibero;
+  return position;
+}
+
+function mapSessionTypeLabel(value: string | null | undefined, t: Record<string, string>) {
+  if (!value) return "-";
+  if (value === "team") return t.sessionTypeTeam;
+  if (value === "strength") return t.sessionTypeStrength;
+  if (value === "technical") return t.sessionTypeTechnical;
+  if (value === "recovery") return t.sessionTypeRecovery;
+  return value;
+}
+
+function mapParticipationLabel(value: string | null | undefined, t: Record<string, string>) {
+  if (!value) return "-";
+  if (value === "full") return t.participationFull;
+  if (value === "modified") return t.participationModified;
+  if (value === "individual") return t.participationIndividual;
+  if (value === "rest") return t.participationRest;
+  return value;
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>(() => {
     const saved = localStorage.getItem(LANGUAGE_KEY);
@@ -157,16 +218,18 @@ function App() {
     }
     return "de";
   });
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [registerForm, setRegisterForm] = useState({
+    username: "",
     email: "",
     password: "",
     name: "",
-    role: "player" as "player" | "coach",
     team_id: "",
+    player_position: "",
   });
+  const [availableTeams, setAvailableTeams] = useState<TeamOption[]>([]);
   const [accessToken, setAccessToken] = useState<string | null>(() =>
     sessionStorage.getItem(ACCESS_TOKEN_KEY),
   );
@@ -178,7 +241,9 @@ function App() {
 
   const [wellness, setWellness] = useState<WellnessEntry[]>([]);
   const [cycle, setCycle] = useState<CycleEntry[]>([]);
+  const [training, setTraining] = useState<TrainingEntry[]>([]);
   const [consents, setConsents] = useState<PrivacyConsent[]>([]);
+  const [injuries, setInjuries] = useState<InjuryEntry[]>([]);
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [teamPredictions, setTeamPredictions] = useState<Prediction[]>([]);
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
@@ -214,7 +279,26 @@ function App() {
     contraception_type: "",
     notes: "",
   });
+  const [trainingForm, setTrainingForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    duration_min: 75,
+    intensity: 6,
+    session_rpe: 6,
+    session_type: "team" as "team" | "strength" | "technical" | "recovery",
+    participation_status: "full" as "full" | "modified" | "individual" | "rest",
+    jump_count: "",
+  });
+  const [injuryForm, setInjuryForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    body_location: "",
+    pain_intensity: 4,
+    is_chronic: false,
+    medical_attention: false,
+    time_loss_days: 0,
+    description: "",
+  });
   const t = TEXT[language];
+  const tt = t as Record<string, string>;
   const locale = LOCALES[language];
 
   useEffect(() => {
@@ -228,7 +312,9 @@ function App() {
     setUser(null);
     setWellness([]);
     setCycle([]);
+    setTraining([]);
     setConsents([]);
+    setInjuries([]);
     setPrediction(null);
     setTeamPredictions([]);
     setSelectedPlayerId(null);
@@ -245,14 +331,19 @@ function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const [wellnessEntries, cycleEntries, privacyConsents, risk] = await Promise.all([
+      const [wellnessEntries, cycleEntries, trainingEntries, injuryEntries, privacyConsents, risk] =
+        await Promise.all([
         apiRequest<WellnessEntry[]>("/api/wellness/", undefined, accessToken),
         apiRequest<CycleEntry[]>("/api/cycle/", undefined, accessToken),
+        apiRequest<TrainingEntry[]>("/api/training/", undefined, accessToken),
+        apiRequest<InjuryEntry[]>("/api/injury/", undefined, accessToken),
         apiRequest<PrivacyConsent[]>("/api/privacy/consent", undefined, accessToken),
         apiRequest<Prediction>(`/api/predictions/${user.id}`, undefined, accessToken),
       ]);
       setWellness(wellnessEntries);
       setCycle(cycleEntries);
+      setTraining(trainingEntries);
+      setInjuries(injuryEntries);
       setConsents(privacyConsents);
       setPrediction(risk);
     } catch (e) {
@@ -332,6 +423,15 @@ function App() {
     }
   }, [accessToken, selectedPlayerId, t.detailLoadFailed, user]);
 
+  const loadAvailableTeams = useCallback(async () => {
+    try {
+      const teams = await apiRequest<TeamOption[]>("/api/teams/");
+      setAvailableTeams(teams);
+    } catch {
+      setAvailableTeams([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (!accessToken) return;
     apiRequest<User>("/api/auth/me", undefined, accessToken)
@@ -344,6 +444,11 @@ function App() {
         logout();
       });
   }, [accessToken, logout, t.sessionLoadFailed]);
+
+  useEffect(() => {
+    if (user || !isRegisterMode) return;
+    void loadAvailableTeams();
+  }, [isRegisterMode, loadAvailableTeams, user]);
 
   useEffect(() => {
     if (user?.role === "player") {
@@ -384,6 +489,59 @@ function App() {
     return wellnessTrend[selectedTrendIndex] ?? null;
   }, [selectedTrendIndex, wellnessTrend]);
 
+  const coachWellnessTrend = useMemo(
+    () =>
+      selectedPlayerWellness
+        .slice(0, 7)
+        .reverse()
+        .map((entry) => ({
+          date: entry.date,
+          score: Math.round((entry.sleep_quality + entry.mental_energy + entry.motivation) / 3),
+          sleep_quality: entry.sleep_quality,
+          mental_energy: entry.mental_energy,
+          motivation: entry.motivation,
+        })),
+    [selectedPlayerWellness],
+  );
+
+  const coachTrainingTrend = useMemo(
+    () =>
+      selectedPlayerTraining
+        .slice(0, 7)
+        .reverse()
+        .map((entry) => ({
+          date: entry.date,
+          duration: entry.duration_min,
+          intensity: entry.intensity,
+        })),
+    [selectedPlayerTraining],
+  );
+
+  const coachTrainingAvgDuration = useMemo(() => {
+    if (coachTrainingTrend.length === 0) return 0;
+    return coachTrainingTrend.reduce((sum, entry) => sum + entry.duration, 0) / coachTrainingTrend.length;
+  }, [coachTrainingTrend]);
+
+  const teamRiskAverage = useMemo(() => {
+    if (teamPredictions.length === 0) return 0;
+    return (
+      teamPredictions.reduce((sum, predictionItem) => sum + predictionItem.risk_score, 0) /
+      teamPredictions.length
+    );
+  }, [teamPredictions]);
+
+  const coachPriorityList = useMemo(() => {
+    return [...teamPredictions].sort((a, b) => {
+      const aTimeLoss = a.latest_time_loss_days ?? 0;
+      const bTimeLoss = b.latest_time_loss_days ?? 0;
+      if (bTimeLoss !== aTimeLoss) return bTimeLoss - aTimeLoss;
+      const aPain = a.latest_pain_intensity ?? 0;
+      const bPain = b.latest_pain_intensity ?? 0;
+      if (bPain !== aPain) return bPain - aPain;
+      return b.risk_score - a.risk_score;
+    });
+  }, [teamPredictions]);
+
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsLoading(true);
@@ -392,7 +550,7 @@ function App() {
     try {
       const tokens = await apiRequest<TokenResponse>("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
       sessionStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
       sessionStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
@@ -414,23 +572,26 @@ function App() {
       await apiRequest<User>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
+          username: registerForm.username,
           email: registerForm.email,
           password: registerForm.password,
-          role: registerForm.role,
+          role: "player",
           name: registerForm.name,
-          team_id: registerForm.team_id ? Number(registerForm.team_id) : null,
+          team_id: Number(registerForm.team_id),
+          player_position: registerForm.player_position,
         }),
       });
       setMessage(t.registerSuccess);
-      setEmail(registerForm.email);
+      setUsername(registerForm.username);
       setPassword(registerForm.password);
       setIsRegisterMode(false);
       setRegisterForm({
+        username: "",
         email: "",
         password: "",
         name: "",
-        role: "player",
         team_id: "",
+        player_position: "",
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : t.registerFailed);
@@ -451,7 +612,6 @@ function App() {
           method: "POST",
           body: JSON.stringify({
             ...wellnessForm,
-            rpe_previous_day: wellnessForm.rpe_previous_day,
             free_text: wellnessForm.free_text || null,
           }),
         },
@@ -478,7 +638,6 @@ function App() {
           method: "POST",
           body: JSON.stringify({
             ...cycleForm,
-            pms_score: cycleForm.pms_score,
             contraception_type: cycleForm.contraception_type || null,
             notes: cycleForm.notes || null,
           }),
@@ -489,6 +648,37 @@ function App() {
       await loadPlayerData();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.cycleSaveFailed);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleTrainingSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      await apiRequest<TrainingEntry>(
+        "/api/training/",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            date: trainingForm.date,
+            duration_min: trainingForm.duration_min,
+            intensity: trainingForm.intensity,
+            session_rpe: trainingForm.session_rpe,
+            session_type: trainingForm.session_type,
+            participation_status: trainingForm.participation_status,
+            jump_count: trainingForm.jump_count ? Number(trainingForm.jump_count) : null,
+          }),
+        },
+        accessToken,
+      );
+      setMessage(tt.trainingSaved);
+      await loadPlayerData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tt.trainingSaveFailed);
     } finally {
       setIsLoading(false);
     }
@@ -510,10 +700,47 @@ function App() {
         },
         accessToken,
       );
-      setMessage(`${t.consentSavedPrefix} ${consent.coach_id} ${t.consentSavedSuffix}`);
+      setMessage(
+        `${t.consentSavedPrefix} ${consent.coach_name ?? `${t.coach} ${consent.coach_id}`} ${t.consentSavedSuffix}`,
+      );
       await loadPlayerData();
     } catch (e) {
       setError(e instanceof Error ? e.message : t.privacySaveFailed);
+    }
+  }
+
+  async function handleInjurySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!accessToken) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      await apiRequest<InjuryEntry>(
+        "/api/injury/",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...injuryForm,
+            description: injuryForm.description || null,
+          }),
+        },
+        accessToken,
+      );
+      setMessage(tt.injurySaved);
+      setInjuryForm((prev) => ({
+        ...prev,
+        body_location: "",
+        pain_intensity: 4,
+        is_chronic: false,
+        medical_attention: false,
+        time_loss_days: 0,
+        description: "",
+      }));
+      await loadPlayerData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : tt.injurySaveFailed);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -528,12 +755,7 @@ function App() {
               className="h-12 w-12 rounded-lg shadow-sm"
             />
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                VolleySync
-              </p>
-              <h1 className="text-3xl font-bold">
-                {user?.role === "coach" ? t.coachApp : t.playerApp}
-              </h1>
+              <h1 className="text-3xl font-bold">VolleySync</h1>
               <p className="mt-1 text-slate-700">{t.appTagline}</p>
             </div>
           </div>
@@ -596,16 +818,15 @@ function App() {
               <form className="space-y-3" onSubmit={handleLogin}>
                 <h2 className="text-xl font-semibold">{t.login}</h2>
                 <p className="text-xs text-slate-600">
-                  {t.seedCoaches}: <code>synthetic.headcoach@kip.local</code> {t.and}{" "}
-                  <code>synthetic.athletiktrainerin@kip.local</code>
+                  {t.seedCoaches}: <code>Timo</code> {t.and} <code>Denise</code>
                 </p>
                 <label className="block text-sm">
-                  {t.email}
+                  {t.username}
                   <input
                     className="mt-1 w-full rounded border px-3 py-2"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    type="email"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    type="text"
                     required
                   />
                 </label>
@@ -643,6 +864,18 @@ function App() {
                   />
                 </label>
                 <label className="block text-sm">
+                  {t.username}
+                  <input
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={registerForm.username}
+                    onChange={(event) =>
+                      setRegisterForm((prev) => ({ ...prev, username: event.target.value }))
+                    }
+                    type="text"
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
                   {t.email}
                   <input
                     className="mt-1 w-full rounded border px-3 py-2"
@@ -651,7 +884,6 @@ function App() {
                       setRegisterForm((prev) => ({ ...prev, email: event.target.value }))
                     }
                     type="email"
-                    required
                   />
                 </label>
                 <label className="block text-sm">
@@ -668,37 +900,45 @@ function App() {
                   />
                 </label>
                 <label className="block text-sm">
-                  {t.role}
-                  <select
-                    className="mt-1 w-full rounded border px-3 py-2"
-                    value={registerForm.role}
-                    onChange={(event) =>
-                      setRegisterForm((prev) => ({
-                        ...prev,
-                        role: event.target.value as "player" | "coach",
-                      }))
-                    }
-                  >
-                    <option value="player">{t.player}</option>
-                    <option value="coach">{t.coachRole}</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
                   {t.teamIdOptional}
-                  <input
+                  <select
                     className="mt-1 w-full rounded border px-3 py-2"
                     value={registerForm.team_id}
                     onChange={(event) =>
                       setRegisterForm((prev) => ({ ...prev, team_id: event.target.value }))
                     }
-                    type="number"
-                    min={1}
-                  />
+                    required
+                  >
+                    <option value="">{t.selectTeam}</option>
+                    {availableTeams.map((team) => (
+                      <option key={team.id} value={String(team.id)}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  {tt.playerPosition}
+                  <select
+                    className="mt-1 w-full rounded border px-3 py-2"
+                    value={registerForm.player_position}
+                    onChange={(event) =>
+                      setRegisterForm((prev) => ({ ...prev, player_position: event.target.value }))
+                    }
+                    required
+                  >
+                    <option value="">{tt.selectPlayerPosition}</option>
+                    <option value="setter">{tt.posSetter}</option>
+                    <option value="outside_hitter">{tt.posOutsideHitter}</option>
+                    <option value="opposite">{tt.posOpposite}</option>
+                    <option value="middle_blocker">{tt.posMiddleBlocker}</option>
+                    <option value="libero">{tt.posLibero}</option>
+                  </select>
                 </label>
                 <button
                   className="w-full rounded bg-emerald-600 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-70"
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || availableTeams.length === 0}
                 >
                   {isLoading ? t.registering : t.createAccount}
                 </button>
@@ -765,6 +1005,8 @@ function App() {
                     { key: "dashboard", label: t.dashboard },
                     { key: "wellness", label: t.wellnessCheck },
                     { key: "cycle", label: t.cycle },
+                    { key: "training", label: t.trainingLoad },
+                    { key: "injury", label: tt.injuryTracking },
                     { key: "privacy", label: t.privacySettings },
                   ]
               ).map((item) => (
@@ -1261,6 +1503,294 @@ function App() {
               </section>
             )}
 
+            {user.role === "player" && tab === "injury" && (
+              <section className="space-y-4 rounded bg-white p-6 shadow">
+                <form className="space-y-3" onSubmit={handleInjurySubmit}>
+                  <h3 className="text-lg font-semibold">{tt.injuryTracking}</h3>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="text-sm">
+                      {t.date}
+                      <input
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        type="date"
+                        value={injuryForm.date}
+                        onChange={(event) =>
+                          setInjuryForm((prev) => ({ ...prev, date: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm">
+                      {tt.bodyLocation}
+                      <input
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        value={injuryForm.body_location}
+                        onChange={(event) =>
+                          setInjuryForm((prev) => ({ ...prev, body_location: event.target.value }))
+                        }
+                        required
+                      />
+                    </label>
+                    <label className="text-sm">
+                      {tt.painIntensity} (1-10):{" "}
+                      <span className="font-semibold">{injuryForm.pain_intensity}</span>
+                      <input
+                        className="mt-1 w-full"
+                        type="range"
+                        min={1}
+                        max={10}
+                        step={1}
+                        value={injuryForm.pain_intensity}
+                        onChange={(event) =>
+                          setInjuryForm((prev) => ({
+                            ...prev,
+                            pain_intensity: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm flex items-center gap-2 pt-6">
+                      <input
+                        type="checkbox"
+                        checked={injuryForm.is_chronic}
+                        onChange={(event) =>
+                          setInjuryForm((prev) => ({ ...prev, is_chronic: event.target.checked }))
+                        }
+                      />
+                      {tt.isChronic}
+                    </label>
+                    <label className="text-sm flex items-center gap-2 pt-6">
+                      <input
+                        type="checkbox"
+                        checked={injuryForm.medical_attention}
+                        onChange={(event) =>
+                          setInjuryForm((prev) => ({
+                            ...prev,
+                            medical_attention: event.target.checked,
+                          }))
+                        }
+                      />
+                      {tt.medicalAttention}
+                    </label>
+                    <label className="text-sm">
+                      {tt.timeLossDays}
+                      <input
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={injuryForm.time_loss_days}
+                        onChange={(event) =>
+                          setInjuryForm((prev) => ({
+                            ...prev,
+                            time_loss_days: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-sm">
+                    {t.note}
+                    <textarea
+                      className="mt-1 w-full rounded border px-3 py-2"
+                      rows={3}
+                      value={injuryForm.description}
+                      onChange={(event) =>
+                        setInjuryForm((prev) => ({ ...prev, description: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <button
+                    className="rounded bg-blue-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-70"
+                    type="submit"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? t.saving : tt.saveInjury}
+                  </button>
+                </form>
+
+                <article className="rounded border p-4">
+                  <h4 className="font-semibold">{t.injuryHistory}</h4>
+                  {injuries.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-600">{tt.noInjuryData}</p>
+                  ) : (
+                    <ul className="mt-2 space-y-2 text-sm">
+                      {injuries.slice(0, 10).map((entry) => (
+                        <li key={entry.id} className="rounded bg-slate-50 px-3 py-2">
+                          <p className="font-medium">
+                            {entry.date} - {entry.body_location}
+                          </p>
+                          <p>
+                            {tt.painIntensity}: {entry.pain_intensity}/10
+                            {entry.is_chronic ? ` (${tt.isChronic})` : ""}
+                          </p>
+                          <p>
+                            {tt.medicalAttention}: {entry.medical_attention ? tt.yes : tt.no} -{" "}
+                            {tt.timeLossDays}: {entry.time_loss_days}
+                          </p>
+                          {entry.description && <p className="text-slate-600">{entry.description}</p>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              </section>
+            )}
+
+            {user.role === "player" && tab === "training" && (
+              <section className="space-y-4 rounded bg-white p-6 shadow">
+                <form className="space-y-3" onSubmit={handleTrainingSubmit}>
+                  <h3 className="text-lg font-semibold">{tt.trainingEntry}</h3>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="text-sm">
+                      {t.date}
+                      <input
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        type="date"
+                        value={trainingForm.date}
+                        onChange={(event) =>
+                          setTrainingForm((prev) => ({ ...prev, date: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm">
+                      {tt.durationMinutes}
+                      <input
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        type="number"
+                        min={1}
+                        max={600}
+                        value={trainingForm.duration_min}
+                        onChange={(event) =>
+                          setTrainingForm((prev) => ({
+                            ...prev,
+                            duration_min: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm">
+                      {tt.intensityLabel} (1-10):{" "}
+                      <span className="font-semibold">{trainingForm.intensity}</span>
+                      <input
+                        className="mt-1 w-full"
+                        type="range"
+                        min={1}
+                        max={10}
+                        step={1}
+                        value={trainingForm.intensity}
+                        onChange={(event) =>
+                          setTrainingForm((prev) => ({ ...prev, intensity: Number(event.target.value) }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm">
+                      {tt.sessionRpeLabel} (0-10):{" "}
+                      <span className="font-semibold">{trainingForm.session_rpe}</span>
+                      <input
+                        className="mt-1 w-full"
+                        type="range"
+                        min={0}
+                        max={10}
+                        step={1}
+                        value={trainingForm.session_rpe}
+                        onChange={(event) =>
+                          setTrainingForm((prev) => ({
+                            ...prev,
+                            session_rpe: Number(event.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-sm">
+                      {tt.sessionType}
+                      <select
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        value={trainingForm.session_type}
+                        onChange={(event) =>
+                          setTrainingForm((prev) => ({
+                            ...prev,
+                            session_type: event.target.value as
+                              | "team"
+                              | "strength"
+                              | "technical"
+                              | "recovery",
+                          }))
+                        }
+                      >
+                        <option value="team">{tt.sessionTypeTeam}</option>
+                        <option value="strength">{tt.sessionTypeStrength}</option>
+                        <option value="technical">{tt.sessionTypeTechnical}</option>
+                        <option value="recovery">{tt.sessionTypeRecovery}</option>
+                      </select>
+                    </label>
+                    <label className="text-sm">
+                      {tt.participationStatus}
+                      <select
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        value={trainingForm.participation_status}
+                        onChange={(event) =>
+                          setTrainingForm((prev) => ({
+                            ...prev,
+                            participation_status: event.target.value as
+                              | "full"
+                              | "modified"
+                              | "individual"
+                              | "rest",
+                          }))
+                        }
+                      >
+                        <option value="full">{tt.participationFull}</option>
+                        <option value="modified">{tt.participationModified}</option>
+                        <option value="individual">{tt.participationIndividual}</option>
+                        <option value="rest">{tt.participationRest}</option>
+                      </select>
+                    </label>
+                    <label className="text-sm md:col-span-2">
+                      {tt.jumpCountOptional}
+                      <input
+                        className="mt-1 w-full rounded border px-3 py-2"
+                        type="number"
+                        min={0}
+                        value={trainingForm.jump_count}
+                        onChange={(event) =>
+                          setTrainingForm((prev) => ({ ...prev, jump_count: event.target.value }))
+                        }
+                      />
+                    </label>
+                  </div>
+                  <button
+                    className="rounded bg-blue-600 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-70"
+                    type="submit"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? t.saving : tt.saveTraining}
+                  </button>
+                </form>
+
+                <article className="rounded border p-4">
+                  <h4 className="font-semibold">{tt.trainingHistory}</h4>
+                  {training.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-600">{tt.noTrainingEntries}</p>
+                  ) : (
+                    <ul className="mt-2 space-y-2 text-sm">
+                      {training.slice(0, 10).map((entry) => (
+                        <li key={entry.id} className="rounded bg-slate-50 px-3 py-2">
+                          <p className="font-medium">
+                            {entry.date} - {entry.duration_min} min, {tt.intensityLabel} {entry.intensity},{" "}
+                            sRPE {entry.session_rpe ?? "-"}
+                          </p>
+                          <p className="text-slate-700">
+                            {tt.sessionType}: {entry.session_type ?? "-"} - {tt.participationStatus}:{" "}
+                            {entry.participation_status ?? "-"}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </article>
+              </section>
+            )}
+
             {user.role === "coach" && tab === "team" && (
               <section className="rounded bg-white p-6 shadow">
                 <h3 className="text-lg font-semibold">{t.teamOverview}</h3>
@@ -1268,9 +1798,7 @@ function App() {
                   <p className="mt-3 text-sm text-slate-600">{t.noPlayers}</p>
                 ) : (
                   <ul className="mt-3 space-y-2">
-                    {[...teamPredictions]
-                      .sort((a, b) => b.risk_score - a.risk_score)
-                      .map((item) => (
+                    {coachPriorityList.map((item) => (
                         <li
                           key={`${item.player_id}-${item.date ?? "today"}`}
                           className="flex flex-wrap items-center justify-between gap-2 rounded border p-3"
@@ -1280,8 +1808,11 @@ function App() {
                               className={`h-4 w-4 rounded-full ${riskColor(item.risk_level)}`}
                             />
                             <p className="font-medium">
-                              {t.player} #{item.player_id}
+                              {item.player_name ?? `${t.player} #${item.player_id}`}
                             </p>
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
+                              {mapPositionLabel(item.player_position, tt)}
+                            </span>
                           </div>
                           <div className="flex items-center gap-3 text-sm">
                             <span>
@@ -1298,6 +1829,51 @@ function App() {
                             >
                               {t.detail}
                             </button>
+                          </div>
+                          <div className="mt-2 w-full">
+                            <div className="h-2 w-full rounded bg-slate-200">
+                              <div
+                                className={`h-2 rounded ${riskColor(item.risk_level)}`}
+                                style={{ width: `${Math.min(100, Math.max(0, item.risk_score * 100))}%` }}
+                              />
+                            </div>
+                            <p className="mt-1 text-xs text-slate-600">
+                              {t.avg}: {(teamRiskAverage * 100).toFixed(1)}%
+                            </p>
+                          </div>
+                          <div className="mt-2 w-full flex flex-wrap gap-2 text-xs">
+                            <span className="rounded bg-blue-50 px-2 py-1 text-blue-800">
+                              sRPE: {item.latest_session_rpe ?? "-"}
+                            </span>
+                            <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-800">
+                              {tt.sessionType}: {mapSessionTypeLabel(item.latest_session_type, tt)}
+                            </span>
+                            <span className="rounded bg-violet-50 px-2 py-1 text-violet-800">
+                              {tt.participationStatus}:{" "}
+                              {mapParticipationLabel(item.latest_participation_status, tt)}
+                            </span>
+                            <span
+                              className={`rounded px-2 py-1 ${
+                                (item.latest_pain_intensity ?? 0) >= 7
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-amber-50 text-amber-800"
+                              }`}
+                            >
+                              {tt.painIntensity}: {item.latest_pain_intensity ?? "-"}
+                            </span>
+                            <span
+                              className={`rounded px-2 py-1 ${
+                                (item.latest_time_loss_days ?? 0) > 0
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-emerald-50 text-emerald-800"
+                              }`}
+                            >
+                              {tt.timeLossDays}: {item.latest_time_loss_days ?? 0}
+                            </span>
+                            <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">
+                              {tt.medicalAttention}:{" "}
+                              {item.latest_medical_attention ? tt.yes : tt.no}
+                            </span>
                           </div>
                         </li>
                       ))}
@@ -1318,7 +1894,7 @@ function App() {
                     >
                       {teamPredictions.map((item) => (
                         <option key={`sel-${item.player_id}`} value={item.player_id}>
-                          {t.player} #{item.player_id}
+                          {item.player_name ?? `${t.player} #${item.player_id}`}
                         </option>
                       ))}
                     </select>
@@ -1339,14 +1915,31 @@ function App() {
                   ) : selectedPlayerWellness.length === 0 ? (
                     <p className="mt-2 text-sm text-slate-600">{t.noWellnessData}</p>
                   ) : (
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {selectedPlayerWellness.slice(0, 7).map((entry) => (
-                        <li key={entry.id}>
-                          {entry.date}: {t.energy} {entry.mental_energy}, {t.motivationLabel}{" "}
-                          {entry.motivation}, {t.sleep} {formatSleepHours(entry.sleep_hours)}h
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      <svg viewBox="0 0 100 100" className="mt-3 h-32 w-full rounded bg-slate-100 p-2">
+                        <polyline
+                          fill="none"
+                          stroke="#2563eb"
+                          strokeWidth="2.5"
+                          points={formatTrendPoints(coachWellnessTrend.map((point) => point.score))}
+                        />
+                        <polyline
+                          fill="none"
+                          stroke="#0f766e"
+                          strokeWidth="2"
+                          points={formatTrendPoints(coachWellnessTrend.map((point) => point.sleep_quality))}
+                        />
+                        <polyline
+                          fill="none"
+                          stroke="#9333ea"
+                          strokeWidth="2"
+                          points={formatTrendPoints(coachWellnessTrend.map((point) => point.mental_energy))}
+                        />
+                      </svg>
+                      <p className="mt-2 text-xs text-slate-600">
+                        {t.avgBlue}, {t.greenSleep}, {t.purpleMental}
+                      </p>
+                    </>
                   )}
                 </article>
 
@@ -1355,13 +1948,25 @@ function App() {
                   {selectedPlayerTraining.length === 0 ? (
                     <p className="mt-2 text-sm text-slate-600">{t.noTrainingData}</p>
                   ) : (
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {selectedPlayerTraining.slice(0, 7).map((entry) => (
-                        <li key={entry.id}>
-                          {entry.date}: {entry.duration_min} {t.intensityAt} {entry.intensity}
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      <svg viewBox="0 0 100 100" className="mt-3 h-32 w-full rounded bg-slate-100 p-2">
+                        <polyline
+                          fill="none"
+                          stroke="#0f766e"
+                          strokeWidth="2.5"
+                          points={formatTrendPoints(coachTrainingTrend.map((point) => point.duration))}
+                        />
+                        <polyline
+                          fill="none"
+                          stroke="#ea580c"
+                          strokeWidth="2"
+                          points={formatTrendPoints(coachTrainingTrend.map((point) => point.intensity))}
+                        />
+                      </svg>
+                      <p className="mt-2 text-sm text-slate-700">
+                        {t.avg}: {coachTrainingAvgDuration.toFixed(1)} min
+                      </p>
+                    </>
                   )}
                 </article>
 
@@ -1372,13 +1977,13 @@ function App() {
                   ) : selectedPlayerCycle.length === 0 ? (
                     <p className="mt-2 text-sm text-slate-600">{t.noCycleData}</p>
                   ) : (
-                    <ul className="mt-2 space-y-1 text-sm">
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
                       {selectedPlayerCycle.slice(0, 7).map((entry) => (
-                        <li key={entry.id}>
-                          {entry.date}: {t.day} {entry.cycle_day}, {t.phase} {entry.phase}
-                        </li>
+                        <span key={entry.id} className="rounded bg-slate-100 px-2 py-1">
+                          {formatShortDate(entry.date, locale)}: {entry.phase} (D{entry.cycle_day})
+                        </span>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </article>
 

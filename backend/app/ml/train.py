@@ -27,6 +27,7 @@ MODEL_PATH = MODEL_DIR / "risk_model.joblib"
 TRAINING_STATUS_PATH = MODEL_DIR / "training_status.json"
 SYNTHETIC_EMAIL_SUFFIX = "@kip.local"
 SYNTHETIC_EMAIL_PREFIX = "synthetic."
+SYNTHETIC_USERNAME_PREFIX = "player."
 
 
 @dataclass(frozen=True)
@@ -36,21 +37,28 @@ class ModelBundle:
     version: str
 
 
-def _is_synthetic_user(email: str) -> bool:
-    lowered = email.lower()
-    return lowered.startswith(SYNTHETIC_EMAIL_PREFIX) and lowered.endswith(SYNTHETIC_EMAIL_SUFFIX)
+def _is_synthetic_user(*, username: str, email: str | None) -> bool:
+    lowered_username = username.lower()
+    if lowered_username.startswith(SYNTHETIC_USERNAME_PREFIX):
+        return True
+    if email:
+        lowered_email = email.lower()
+        return lowered_email.startswith(SYNTHETIC_EMAIL_PREFIX) and lowered_email.endswith(
+            SYNTHETIC_EMAIL_SUFFIX
+        )
+    return False
 
 
 def _build_dataset(db: Session) -> pd.DataFrame:
     players = db.query(User).filter(User.role == UserRole.PLAYER).all()
     frames: list[pd.DataFrame] = []
     for p in players:
-        f = build_player_feature_frame(db, player_id=p.id)
+        f = build_player_feature_frame(db, player_id=p.id, player_position=p.player_position)
         if f.empty:
             continue
         f = add_overload_label(f)
         f["player_id"] = p.id
-        f["is_synthetic"] = int(_is_synthetic_user(p.email))
+        f["is_synthetic"] = int(_is_synthetic_user(username=p.username, email=p.email))
         frames.append(f)
     if not frames:
         return pd.DataFrame()
@@ -58,7 +66,7 @@ def _build_dataset(db: Session) -> pd.DataFrame:
 
 
 def _feature_columns(df: pd.DataFrame) -> list[str]:
-    ignore = {"date", "phase", "overload_risk_3d", "player_id", "is_synthetic"}
+    ignore = {"date", "phase", "session_type", "overload_risk_3d", "player_id", "is_synthetic"}
     return [c for c in df.columns if c not in ignore]
 
 
@@ -66,17 +74,28 @@ def _select_training_frame(
     df: pd.DataFrame,
     *,
     min_real_rows: int,
+    min_positive_rows: int,
     allow_synthetic_bootstrap: bool,
 ) -> tuple[pd.DataFrame, str]:
     real_df = df[df["is_synthetic"] == 0]
-    if len(real_df) >= min_real_rows and real_df["overload_risk_3d"].nunique() >= 2:
+    real_positive_rows = int((real_df["overload_risk_3d"] == 1).sum())
+    if (
+        len(real_df) >= min_real_rows
+        and real_df["overload_risk_3d"].nunique() >= 2
+        and real_positive_rows >= min_positive_rows
+    ):
         return real_df.copy(), "real_only"
 
-    if allow_synthetic_bootstrap and df["overload_risk_3d"].nunique() >= 2:
+    mixed_positive_rows = int((df["overload_risk_3d"] == 1).sum())
+    if (
+        allow_synthetic_bootstrap
+        and df["overload_risk_3d"].nunique() >= 2
+        and mixed_positive_rows >= min_positive_rows
+    ):
         return df.copy(), "bootstrap_mixed"
 
     raise ValueError(
-        "Not enough real data with class balance yet. "
+        "Not enough labeled data quality yet (rows/class balance/positive cases). "
         "Collect more data or allow synthetic bootstrap training."
     )
 
@@ -111,6 +130,7 @@ def train_random_forest(
     db: Session,
     *,
     min_real_rows: int = 500,
+    min_positive_rows: int = 20,
     allow_synthetic_bootstrap: bool = True,
 ) -> dict[str, float | str | int]:
     df = _build_dataset(db)
@@ -119,10 +139,22 @@ def train_random_forest(
 
     real_rows = int((df["is_synthetic"] == 0).sum())
     synthetic_rows = int((df["is_synthetic"] == 1).sum())
+    positive_rows = int((df["overload_risk_3d"] == 1).sum())
+    positive_rate = float(positive_rows / len(df)) if len(df) > 0 else 0.0
+    missing_session_rpe_rows = int((df["session_rpe"] == 0).sum()) if "session_rpe" in df else 0
+    modified_participation_rows = (
+        int((df["modified_participation_flag"] == 1).sum())
+        if "modified_participation_flag" in df
+        else 0
+    )
+    medical_attention_rows = (
+        int((df["injury_medical_attention"] == 1).sum()) if "injury_medical_attention" in df else 0
+    )
 
     df_selected, training_data_mode = _select_training_frame(
         df,
         min_real_rows=min_real_rows,
+        min_positive_rows=min_positive_rows,
         allow_synthetic_bootstrap=allow_synthetic_bootstrap,
     )
     df_selected = df_selected.sort_values(["player_id", "date"]).reset_index(drop=True)
@@ -171,6 +203,12 @@ def train_random_forest(
         "synthetic_rows": synthetic_rows,
         "rows": int(len(df)),
         "min_real_rows": int(min_real_rows),
+        "min_positive_rows": int(min_positive_rows),
+        "positive_rows": positive_rows,
+        "positive_rate": positive_rate,
+        "missing_session_rpe_rows": missing_session_rpe_rows,
+        "modified_participation_rows": modified_participation_rows,
+        "medical_attention_rows": medical_attention_rows,
         **metrics,
     }
     _write_training_status(

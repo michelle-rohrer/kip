@@ -31,12 +31,15 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _run_training(*, min_real_rows: int, allow_synthetic_bootstrap: bool) -> None:
+def _run_training(
+    *, min_real_rows: int, min_positive_rows: int, allow_synthetic_bootstrap: bool
+) -> None:
     db = SessionLocal()
     try:
         metrics = train_random_forest(
             db,
             min_real_rows=min_real_rows,
+            min_positive_rows=min_positive_rows,
             allow_synthetic_bootstrap=allow_synthetic_bootstrap,
         )
         print(f"[retrainer] success: {metrics}")
@@ -47,6 +50,7 @@ def _run_training(*, min_real_rows: int, allow_synthetic_bootstrap: bool) -> Non
             context={
                 "runner": "scheduler",
                 "min_real_rows": min_real_rows,
+                "min_positive_rows": min_positive_rows,
                 "allow_synthetic_bootstrap": allow_synthetic_bootstrap,
             },
         )
@@ -58,6 +62,7 @@ def _run_training(*, min_real_rows: int, allow_synthetic_bootstrap: bool) -> Non
 def main() -> int:
     interval_seconds = max(_env_int("ML_RETRAIN_INTERVAL_SECONDS", 7 * 24 * 60 * 60), 60)
     min_real_rows = max(_env_int("ML_MIN_REAL_ROWS", 500), 50)
+    min_positive_rows = max(_env_int("ML_MIN_POSITIVE_ROWS", 20), 5)
     allow_synthetic_bootstrap = _env_bool("ML_ALLOW_SYNTHETIC_BOOTSTRAP", True)
     run_immediately = _env_bool("ML_RETRAIN_ON_STARTUP", True)
 
@@ -65,6 +70,7 @@ def main() -> int:
         "[retrainer] started with "
         f"interval_seconds={interval_seconds}, "
         f"min_real_rows={min_real_rows}, "
+        f"min_positive_rows={min_positive_rows}, "
         f"allow_synthetic_bootstrap={allow_synthetic_bootstrap}, "
         f"run_immediately={run_immediately}"
     )
@@ -72,6 +78,7 @@ def main() -> int:
     if run_immediately:
         _run_training(
             min_real_rows=min_real_rows,
+            min_positive_rows=min_positive_rows,
             allow_synthetic_bootstrap=allow_synthetic_bootstrap,
         )
 
@@ -84,6 +91,7 @@ def main() -> int:
         time.sleep(interval_seconds)
         _run_training(
             min_real_rows=min_real_rows,
+            min_positive_rows=min_positive_rows,
             allow_synthetic_bootstrap=allow_synthetic_bootstrap,
         )
 

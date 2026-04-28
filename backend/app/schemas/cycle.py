@@ -7,9 +7,9 @@ from app.models import CyclePhase
 
 class CycleEntryCreate(BaseModel):
     date: date
-    cycle_day: int = Field(ge=1, le=60)
-    phase: CyclePhase
-    cycle_length: int = Field(ge=20, le=45)
+    cycle_day: int | None = Field(default=None, ge=1, le=60)
+    phase: CyclePhase | None = None
+    cycle_length: int | None = Field(default=None, ge=20, le=45)
     pms_score: int | None = Field(default=None, ge=0, le=10)
     cramps: bool = False
     migraine: bool = False
@@ -22,9 +22,9 @@ class CycleEntryResponse(BaseModel):
     id: int
     player_id: int
     date: date
-    cycle_day: int
-    phase: CyclePhase
-    cycle_length: int
+    cycle_day: int | None
+    phase: CyclePhase | None
+    cycle_length: int | None
     pms_score: int | None
     cramps: bool
     migraine: bool

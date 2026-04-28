@@ -42,6 +42,7 @@ def test_e2e_register_login_submit_wellness_and_get_prediction(db_session: Sessi
         register_res = client.post(
             "/api/auth/register",
             json={
+                "username": "e2e_player",
                 "email": "e2e.player@example.com",
                 "password": "SuperSecret123",
                 "role": "player",
@@ -53,7 +54,7 @@ def test_e2e_register_login_submit_wellness_and_get_prediction(db_session: Sessi
 
         login_res = client.post(
             "/api/auth/login",
-            json={"email": "e2e.player@example.com", "password": "SuperSecret123"},
+            json={"username": "e2e_player", "password": "SuperSecret123"},
         )
         assert login_res.status_code == 200, login_res.text
         token = login_res.json()["access_token"]

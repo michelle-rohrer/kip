@@ -1,15 +1,21 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from joblib import dump
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import average_precision_score, brier_score_loss, f1_score, recall_score, roc_auc_score
+from sklearn.metrics import (
+    average_precision_score,
+    brier_score_loss,
+    f1_score,
+    recall_score,
+    roc_auc_score,
+)
 from sqlalchemy.orm import Session
 
 from app.ml.features import build_player_feature_frame

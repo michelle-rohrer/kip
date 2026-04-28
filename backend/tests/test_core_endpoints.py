@@ -1,11 +1,12 @@
 from collections.abc import Generator
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Team, User, UserRole
+from app.models import Team
 from app.routers import (
     auth_router,
     cycle_router,
@@ -15,7 +16,7 @@ from app.routers import (
     training_router,
     wellness_router,
 )
-from app.services.auth import hash_password, reset_auth_state
+from app.services.auth import reset_auth_state
 
 
 @pytest.fixture()
@@ -290,7 +291,11 @@ def test_privacy_get_and_invalid_coach(api_client: TestClient, team_and_users: d
 
     empty = api_client.get("/api/privacy/consent", headers=player_headers)
     assert empty.status_code == 200
-    assert empty.json() == []
+    payload = empty.json()
+    assert len(payload) == 1
+    assert payload[0]["coach_id"] == p["coach_id"]
+    assert payload[0]["share_cycle_data"] is False
+    assert payload[0]["share_wellness_data"] is False
 
     bad = api_client.put(
         "/api/privacy/consent",

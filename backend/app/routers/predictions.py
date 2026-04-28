@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.dependencies import get_current_user, require_role
-from app.ml.train import load_training_status
 from app.ml.predict import predict_current_risk, upsert_daily_prediction
+from app.ml.train import load_training_status
 from app.models import User, UserRole
 from app.schemas.predictions import ModelTrainingStatusResponse, RiskPredictionResponse
 from app.services.privacy import assert_coach_can_view_training, get_player_or_404

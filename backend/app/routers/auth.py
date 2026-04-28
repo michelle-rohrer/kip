@@ -4,9 +4,22 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies import get_current_user
 from app.models import User
-from app.schemas import MessageResponse, RefreshTokenRequest, TokenResponse, UserCreate, UserLogin, UserResponse
+from app.schemas import (
+    MessageResponse,
+    RefreshTokenRequest,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
+from app.services.auth import (
+    authenticate_user,
+    issue_tokens,
+    logout_refresh_token,
+    refresh_tokens,
+    register_user,
+)
 from app.services.rate_limit import check_auth_rate_limit
-from app.services.auth import authenticate_user, issue_tokens, logout_refresh_token, refresh_tokens, register_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

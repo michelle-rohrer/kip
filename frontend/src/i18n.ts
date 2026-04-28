@@ -175,8 +175,7 @@ export const TEXT = defineTranslations({
     currentRiskScore: "Current risk score",
     noPrediction: "No prediction available.",
     wellnessTrend: "Wellness trend (7 days)",
-    trendDescription:
-      "Average of sleep quality, mental energy and motivation (scale 1-10).",
+    trendDescription: "Average of sleep quality, mental energy and motivation (scale 1-10).",
     lower: "lower",
     higher: "higher",
     hideDetailView: "Hide detail view",
@@ -299,8 +298,7 @@ export const TEXT = defineTranslations({
     currentRiskScore: "Punteggio rischio attuale",
     noPrediction: "Nessuna previsione disponibile.",
     wellnessTrend: "Trend benessere (7 giorni)",
-    trendDescription:
-      "Media di qualita del sonno, energia mentale e motivazione (scala 1-10).",
+    trendDescription: "Media di qualita del sonno, energia mentale e motivazione (scala 1-10).",
     lower: "piu basso",
     higher: "piu alto",
     hideDetailView: "Nascondi vista dettagli",

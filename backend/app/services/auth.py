@@ -152,3 +152,7 @@ def logout_refresh_token(refresh_token: str) -> None:
 def reset_auth_state() -> None:
     _revoked_refresh_jtis.clear()
     _active_refresh_jtis_by_user.clear()
+    # Keep auth-related in-memory state deterministic across tests/process restarts.
+    from app.services.rate_limit import reset_auth_rate_limit_state
+
+    reset_auth_rate_limit_state()

@@ -513,9 +513,7 @@ function App() {
       setMessage(`${t.consentSavedPrefix} ${consent.coach_id} ${t.consentSavedSuffix}`);
       await loadPlayerData();
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : t.privacySaveFailed,
-      );
+      setError(e instanceof Error ? e.message : t.privacySaveFailed);
     }
   }
 
@@ -524,9 +522,15 @@ function App() {
       <section className="mx-auto max-w-5xl px-6 py-10">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-start gap-4">
-            <img src={volleySyncIcon} alt="VolleySync Icon" className="h-12 w-12 rounded-lg shadow-sm" />
+            <img
+              src={volleySyncIcon}
+              alt="VolleySync Icon"
+              className="h-12 w-12 rounded-lg shadow-sm"
+            />
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">VolleySync</p>
+              <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                VolleySync
+              </p>
               <h1 className="text-3xl font-bold">
                 {user?.role === "coach" ? t.coachApp : t.playerApp}
               </h1>
@@ -715,15 +719,23 @@ function App() {
                     {t.status}:{" "}
                     <span
                       className={
-                        modelStatus.status === "ok" ? "font-semibold text-emerald-700" : "font-semibold text-red-700"
+                        modelStatus.status === "ok"
+                          ? "font-semibold text-emerald-700"
+                          : "font-semibold text-red-700"
                       }
                     >
                       {modelStatus.status}
                     </span>
                   </p>
-                  <p>{t.updated}: {formatDateTime(modelStatus.updated_at, locale)}</p>
-                  <p>{t.lastSuccess}: {formatDateTime(modelStatus.last_success_at, locale)}</p>
-                  <p>{t.lastFailure}: {formatDateTime(modelStatus.last_failure_at, locale)}</p>
+                  <p>
+                    {t.updated}: {formatDateTime(modelStatus.updated_at, locale)}
+                  </p>
+                  <p>
+                    {t.lastSuccess}: {formatDateTime(modelStatus.last_success_at, locale)}
+                  </p>
+                  <p>
+                    {t.lastFailure}: {formatDateTime(modelStatus.last_failure_at, locale)}
+                  </p>
                   <p>
                     {t.mode}:{" "}
                     {String(
@@ -731,10 +743,13 @@ function App() {
                     )}
                   </p>
                   <p>
-                    {t.realRows}: {String((modelStatus.metrics?.real_rows as number | undefined) ?? "-")}
+                    {t.realRows}:{" "}
+                    {String((modelStatus.metrics?.real_rows as number | undefined) ?? "-")}
                   </p>
                   {modelStatus.error && (
-                    <p className="md:col-span-2 text-red-700">{t.error}: {modelStatus.error}</p>
+                    <p className="md:col-span-2 text-red-700">
+                      {t.error}: {modelStatus.error}
+                    </p>
                   )}
                 </div>
               )}
@@ -788,9 +803,7 @@ function App() {
                 </article>
                 <article className="rounded bg-white p-4 shadow">
                   <h3 className="text-lg font-semibold">{t.wellnessTrend}</h3>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {t.trendDescription}
-                  </p>
+                  <p className="mt-2 text-sm text-slate-600">{t.trendDescription}</p>
                   {wellnessTrend.length > 1 ? (
                     <>
                       <svg
@@ -835,9 +848,7 @@ function App() {
                       </button>
                     </>
                   ) : (
-                    <p className="mt-2 text-sm text-slate-600">
-                      {t.notEnoughTrendData}
-                    </p>
+                    <p className="mt-2 text-sm text-slate-600">{t.notEnoughTrendData}</p>
                   )}
                 </article>
                 {isWellnessDetailOpen && wellnessTrend.length > 1 && (
@@ -846,7 +857,10 @@ function App() {
                       <h3 className="text-lg font-semibold">{t.wellnessDetails}</h3>
                       <p className="text-xs text-slate-600">{t.clickPointsForDayDetails}</p>
                     </div>
-                    <svg viewBox="0 0 100 100" className="mt-3 h-52 w-full rounded bg-slate-100 p-2">
+                    <svg
+                      viewBox="0 0 100 100"
+                      className="mt-3 h-52 w-full rounded bg-slate-100 p-2"
+                    >
                       <polyline
                         fill="none"
                         stroke="#2563eb"
@@ -857,13 +871,17 @@ function App() {
                         fill="none"
                         stroke="#0f766e"
                         strokeWidth="2"
-                        points={formatTrendPoints(wellnessTrend.map((point) => point.sleep_quality))}
+                        points={formatTrendPoints(
+                          wellnessTrend.map((point) => point.sleep_quality),
+                        )}
                       />
                       <polyline
                         fill="none"
                         stroke="#9333ea"
                         strokeWidth="2"
-                        points={formatTrendPoints(wellnessTrend.map((point) => point.mental_energy))}
+                        points={formatTrendPoints(
+                          wellnessTrend.map((point) => point.mental_energy),
+                        )}
                       />
                       <polyline
                         fill="none"
@@ -873,7 +891,9 @@ function App() {
                       />
                     </svg>
                     <div className="mt-3 flex flex-wrap gap-3 text-xs">
-                      <span className="rounded bg-blue-100 px-2 py-1 text-blue-800">{t.avgBlue}</span>
+                      <span className="rounded bg-blue-100 px-2 py-1 text-blue-800">
+                        {t.avgBlue}
+                      </span>
                       <span className="rounded bg-teal-100 px-2 py-1 text-teal-800">
                         {t.greenSleep}
                       </span>
@@ -897,13 +917,17 @@ function App() {
                           }`}
                         >
                           <p className="font-medium">{formatShortDate(point.date, locale)}</p>
-                          <p>{t.avg}: {point.score}</p>
+                          <p>
+                            {t.avg}: {point.score}
+                          </p>
                         </button>
                       ))}
                     </div>
                     {selectedTrendPoint && (
                       <div className="mt-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm">
-                        <p className="font-semibold">{t.detailsFor} {selectedTrendPoint.date}</p>
+                        <p className="font-semibold">
+                          {t.detailsFor} {selectedTrendPoint.date}
+                        </p>
                         <p className="mt-1">
                           {t.sleepQuality} {selectedTrendPoint.sleep_quality}, {t.mentalEnergy}{" "}
                           {selectedTrendPoint.mental_energy}, {t.motivationLabel}{" "}
@@ -921,8 +945,8 @@ function App() {
                       <ul className="mt-2 text-sm text-slate-700">
                         {wellness.slice(0, 3).map((entry) => (
                           <li key={entry.id}>
-                            {entry.date}: {t.sleep} {formatSleepHours(entry.sleep_hours)}h, {t.energy}{" "}
-                            {entry.mental_energy}
+                            {entry.date}: {t.sleep} {formatSleepHours(entry.sleep_hours)}h,{" "}
+                            {t.energy} {entry.mental_energy}
                           </li>
                         ))}
                       </ul>
@@ -1091,7 +1115,8 @@ function App() {
                     </select>
                   </label>
                   <label className="text-sm">
-                    {t.pmsScore} (0-10): <span className="font-semibold">{cycleForm.pms_score}</span>
+                    {t.pmsScore} (0-10):{" "}
+                    <span className="font-semibold">{cycleForm.pms_score}</span>
                     <input
                       className="mt-1 w-full"
                       type="range"
@@ -1254,7 +1279,9 @@ function App() {
                             <span
                               className={`h-4 w-4 rounded-full ${riskColor(item.risk_level)}`}
                             />
-                            <p className="font-medium">{t.player} #{item.player_id}</p>
+                            <p className="font-medium">
+                              {t.player} #{item.player_id}
+                            </p>
                           </div>
                           <div className="flex items-center gap-3 text-sm">
                             <span>
@@ -1308,9 +1335,7 @@ function App() {
                 <article className="rounded border p-4">
                   <h4 className="font-semibold">{t.wellnessHistory}</h4>
                   {selectedPlayerWellnessBlocked ? (
-                    <p className="mt-2 text-sm text-amber-700">
-                      {t.wellnessBlocked}
-                    </p>
+                    <p className="mt-2 text-sm text-amber-700">{t.wellnessBlocked}</p>
                   ) : selectedPlayerWellness.length === 0 ? (
                     <p className="mt-2 text-sm text-slate-600">{t.noWellnessData}</p>
                   ) : (
@@ -1343,9 +1368,7 @@ function App() {
                 <article className="rounded border p-4">
                   <h4 className="font-semibold">{t.cycleData}</h4>
                   {selectedPlayerCycleBlocked ? (
-                    <p className="mt-2 text-sm text-amber-700">
-                      {t.cycleBlocked}
-                    </p>
+                    <p className="mt-2 text-sm text-amber-700">{t.cycleBlocked}</p>
                   ) : selectedPlayerCycle.length === 0 ? (
                     <p className="mt-2 text-sm text-slate-600">{t.noCycleData}</p>
                   ) : (
@@ -1361,9 +1384,7 @@ function App() {
 
                 <article className="rounded border p-4">
                   <h4 className="font-semibold">{t.injuryHistory}</h4>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {t.noInjuryEndpoint}
-                  </p>
+                  <p className="mt-2 text-sm text-slate-600">{t.noInjuryEndpoint}</p>
                 </article>
               </section>
             )}

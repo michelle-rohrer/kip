@@ -26,3 +26,7 @@ def check_auth_rate_limit(*, action: str, key: str) -> None:
             detail="Too many auth attempts. Please try again later.",
         )
     bucket.append(now)
+
+
+def reset_auth_rate_limit_state() -> None:
+    _attempts.clear()

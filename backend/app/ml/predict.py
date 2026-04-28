@@ -41,7 +41,9 @@ def _heuristic_score(features: dict) -> float:
     soreness = float(features.get("muscle_soreness", 5.0))
     stress = float(features.get("stress_level", 5.0))
     energy = float(features.get("mental_energy", 6.0))
-    score = 0.22 + (max(acwr - 1.0, 0) * 0.38) + ((soreness - 5.0) * 0.04) + ((stress - energy) * 0.03)
+    score = (
+        0.22 + (max(acwr - 1.0, 0) * 0.38) + ((soreness - 5.0) * 0.04) + ((stress - energy) * 0.03)
+    )
     return float(np.clip(score, 0.02, 0.98))
 
 
@@ -90,7 +92,9 @@ def predict_current_risk(db: Session, *, player_id: int) -> PredictionResult:
     )
 
 
-def upsert_daily_prediction(db: Session, *, player_id: int, result: PredictionResult, on_date: date | None = None) -> RiskPrediction:
+def upsert_daily_prediction(
+    db: Session, *, player_id: int, result: PredictionResult, on_date: date | None = None
+) -> RiskPrediction:
     target_date = on_date or date.today()
     row = (
         db.query(RiskPrediction)

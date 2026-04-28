@@ -94,7 +94,9 @@ def test_refresh_rotates_and_logout_invalidates_refresh_token(client: TestClient
     logout_res = client.post("/api/auth/logout", json={"refresh_token": rotated_refresh})
     assert logout_res.status_code == 200
 
-    post_logout_refresh_res = client.post("/api/auth/refresh", json={"refresh_token": rotated_refresh})
+    post_logout_refresh_res = client.post(
+        "/api/auth/refresh", json={"refresh_token": rotated_refresh}
+    )
     assert post_logout_refresh_res.status_code == 401
 
 

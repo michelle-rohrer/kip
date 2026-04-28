@@ -54,11 +54,15 @@ def get_player_prediction(
 ):
     if current_user.role == UserRole.PLAYER:
         if current_user.id != player_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No access to this player")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="No access to this player"
+            )
     elif current_user.role == UserRole.COACH:
         assert_coach_can_view_training(db, current_user, player_id)
     else:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions"
+        )
 
     result = predict_current_risk(db, player_id=player_id)
     return upsert_daily_prediction(db, player_id=player_id, result=result)

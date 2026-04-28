@@ -102,7 +102,15 @@ def build_synthetic_dataset(
     rng: np.random.Generator,
     end_date: date | None = None,
     config: SyntheticDatasetConfig | None = None,
-) -> tuple[Team, list[User], list[User], list[CycleEntry], list[WellnessEntry], list[TrainingEntry], list[InjuryEntry]]:
+) -> tuple[
+    Team,
+    list[User],
+    list[User],
+    list[CycleEntry],
+    list[WellnessEntry],
+    list[TrainingEntry],
+    list[InjuryEntry],
+]:
     """Build in-memory model instances (not persisted)."""
     cfg = config or SyntheticDatasetConfig()
     if end_date is None:
@@ -146,7 +154,9 @@ def build_synthetic_dataset(
     injury_rows: list[InjuryEntry] = []
 
     for p_idx, player in enumerate(players):
-        player_rng = np.random.default_rng((int(rng.integers(0, 2**31)) ^ (p_idx * 100_003)) & 0x7FFFFFFF)
+        player_rng = np.random.default_rng(
+            (int(rng.integers(0, 2**31)) ^ (p_idx * 100_003)) & 0x7FFFFFFF
+        )
         n_days = int(player_rng.integers(cfg.days_min, cfg.days_max + 1))
         start_date = end_date - timedelta(days=n_days - 1)
 
@@ -246,7 +256,9 @@ def build_synthetic_dataset(
                 np.clip(player_rng.normal(7.2 + (sleep_quality - 6) * 0.15, 0.85), 4.5, 10.5)
             )
 
-            mental_energy = _clip_int(0.55 * sleep_quality + 2.8 + player_rng.normal(0, 1.15), 1, 10)
+            mental_energy = _clip_int(
+                0.55 * sleep_quality + 2.8 + player_rng.normal(0, 1.15), 1, 10
+            )
 
             muscle_soreness = _clip_int(
                 2.5

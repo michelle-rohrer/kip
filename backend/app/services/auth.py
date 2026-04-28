@@ -95,7 +95,9 @@ def decode_token(token: str, *, expected_type: str | None = None) -> dict:
 def register_user(db: Session, user_in: UserCreate) -> User:
     existing_user = db.execute(select(User).where(User.email == user_in.email)).scalar_one_or_none()
     if existing_user is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+        )
 
     user = User(
         email=user_in.email,
@@ -113,7 +115,9 @@ def register_user(db: Session, user_in: UserCreate) -> User:
 def authenticate_user(db: Session, *, email: str, password: str) -> User:
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None or not verify_password(password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
     return user
 
 
@@ -126,12 +130,20 @@ def refresh_tokens(db: Session, refresh_token: str) -> tuple[str, str]:
     user_id = int(payload["sub"])
     jti = payload.get("jti")
 
-    if jti is None or jti in _revoked_refresh_jtis or jti not in _active_refresh_jtis_by_user.get(user_id, set()):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    if (
+        jti is None
+        or jti in _revoked_refresh_jtis
+        or jti not in _active_refresh_jtis_by_user.get(user_id, set())
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        )
 
     user = db.get(User, user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        )
 
     # Rotate refresh tokens to reduce replay risk.
     _revoked_refresh_jtis.add(jti)
@@ -144,7 +156,9 @@ def logout_refresh_token(refresh_token: str) -> None:
     user_id = int(payload["sub"])
     jti = payload.get("jti")
     if jti is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        )
     _revoked_refresh_jtis.add(jti)
     _active_refresh_jtis_by_user.get(user_id, set()).discard(jti)
 

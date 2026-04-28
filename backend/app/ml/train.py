@@ -83,7 +83,9 @@ def _select_training_frame(
 
 def _write_training_status(payload: dict[str, Any]) -> None:
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    TRAINING_STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+    TRAINING_STATUS_PATH.write_text(
+        json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8"
+    )
 
 
 def record_training_failure(*, error: str, context: dict[str, Any] | None = None) -> None:

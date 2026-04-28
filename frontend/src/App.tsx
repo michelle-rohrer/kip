@@ -775,13 +775,28 @@ function App() {
               </select>
             </label>
             {user && (
-              <button
-                className="rounded bg-slate-800 px-4 py-2 text-white"
-                onClick={logout}
-                type="button"
-              >
-                {t.logout}
-              </button>
+              <>
+                {user.role === "player" && (
+                  <button
+                    className={`rounded px-4 py-2 ${
+                      tab === "privacy"
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-slate-700 shadow"
+                    }`}
+                    onClick={() => setTab("privacy")}
+                    type="button"
+                  >
+                    {t.privacySettings}
+                  </button>
+                )}
+                <button
+                  className="rounded bg-slate-800 px-4 py-2 text-white"
+                  onClick={logout}
+                  type="button"
+                >
+                  {t.logout}
+                </button>
+              </>
             )}
           </div>
         </header>
@@ -886,6 +901,7 @@ function App() {
                       setRegisterForm((prev) => ({ ...prev, email: event.target.value }))
                     }
                     type="email"
+                    required
                   />
                 </label>
                 <label className="block text-sm">
@@ -1009,7 +1025,6 @@ function App() {
                     { key: "cycle", label: t.cycle },
                     { key: "training", label: t.trainingLoad },
                     { key: "injury", label: tt.injuryTracking },
-                    { key: "privacy", label: t.privacySettings },
                   ]
               ).map((item) => (
                 <button

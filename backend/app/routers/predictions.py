@@ -53,7 +53,9 @@ def get_team_predictions(
                     "latest_session_rpe": latest_training.session_rpe if latest_training else None,
                     "latest_session_type": latest_training.session_type if latest_training else None,
                     "latest_participation_status": (
-                        latest_training.participation_status if latest_training else None
+                        getattr(latest_training, "participation_status", None)
+                        if latest_training
+                        else None
                     ),
                     "latest_injury_date": latest_injury.date if latest_injury else None,
                     "latest_pain_intensity": latest_injury.pain_intensity if latest_injury else None,

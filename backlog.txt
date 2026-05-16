@@ -1,0 +1,9 @@
+Coach kann Spieler löschen
+Model vollständig trainieren
+Spiele hinzufügen
+in EInstellungen Passwort ändern
+alles zu ä,ü,ö ändern
+Privacy regeln, damit ich mit den Daten arbeiten darf
+klären was Seed Standard ist beim Registrieren
+Irgendwie sowas wie ein Tier zur Streak eêrstellen (also wie viele Tage man es hinteriennader eingetragen hat) und vielleicht ein Ranking oder so
+Zyklus so ändern, dass man einfach nur Periode eintragen muss und der Rest wird selber errechnet

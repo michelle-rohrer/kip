@@ -343,6 +343,11 @@ export const TEXT = defineTranslations({
     accountDeleted: "Konto und alle Daten wurden gelöscht.",
     deleteAccountFailed: "Konto konnte nicht gelöscht werden.",
     deleteAccountWrongPassword: "Passwort stimmt nicht. Nichts wurde gelöscht.",
+    cycleSyncLabel: "Zyklusdaten übernehmen",
+    cycleSyncHint:
+      "Nur wenn du das einschaltest, liest VolleySync Periodentage von diesem Gerät. Ausschalten löscht sie wieder.",
+    cycleSyncOn: "Zyklusdaten werden jetzt übernommen.",
+    cycleSyncOff: "Zyklusdaten werden nicht mehr übernommen und wurden gelöscht.",
     streakDay: "Tag in Folge",
   },
   en: {
@@ -666,6 +671,11 @@ export const TEXT = defineTranslations({
     accountDeleted: "Your account and all data have been deleted.",
     deleteAccountFailed: "The account could not be deleted.",
     deleteAccountWrongPassword: "That password is not correct. Nothing was deleted.",
+    cycleSyncLabel: "Take cycle data",
+    cycleSyncHint:
+      "Only when you switch this on does VolleySync read period days from this device. Switching it off deletes them again.",
+    cycleSyncOn: "Cycle data is now taken from this device.",
+    cycleSyncOff: "Cycle data is no longer taken, and what was taken has been deleted.",
     streakDay: "day in a row",
   },
   it: {
@@ -988,6 +998,11 @@ export const TEXT = defineTranslations({
     accountDeleted: "Account e dati eliminati.",
     deleteAccountFailed: "Impossibile eliminare l'account.",
     deleteAccountWrongPassword: "Password errata. Non è stato eliminato nulla.",
+    cycleSyncLabel: "Importa i dati del ciclo",
+    cycleSyncHint:
+      "Solo se attivi questa opzione VolleySync legge i giorni di ciclo da questo dispositivo. Disattivandola vengono eliminati.",
+    cycleSyncOn: "I dati del ciclo vengono ora importati.",
+    cycleSyncOff: "I dati del ciclo non vengono più importati e sono stati eliminati.",
     streakDay: "giorno di fila",
   },
 } as const);

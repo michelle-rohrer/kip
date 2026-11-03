@@ -14,7 +14,7 @@ import {
   IconUnlink,
   IconWatch,
 } from "./icons";
-import { Button, Card, CardHeader, Chip, EmptyState, Field, TextInput } from "./ui";
+import { Button, Card, CardHeader, Chip, EmptyState, Field, Switch, TextInput } from "./ui";
 import { Tone } from "./theme";
 
 type T = Record<string, string>;
@@ -184,6 +184,7 @@ function ProviderCard({
   onCreateAppleToken,
   onSync,
   onDisconnect,
+  onToggleCycleSync,
 }: {
   t: T;
   locale: string;
@@ -195,6 +196,7 @@ function ProviderCard({
   onCreateAppleToken: () => void;
   onSync: (provider: WearableProvider) => void;
   onDisconnect: (provider: WearableProvider) => void;
+  onToggleCycleSync: (provider: WearableProvider, enabled: boolean) => void;
 }) {
   const meta = PROVIDER_META[status.provider];
   const isBusy = busyProvider === status.provider;
@@ -311,6 +313,18 @@ function ProviderCard({
         )}
       </div>
 
+      {status.connected && (
+        <div className="mt-4 border-t border-line pt-4">
+          <Switch
+            label={t.cycleSyncLabel}
+            description={t.cycleSyncHint}
+            tone="bloom"
+            checked={status.sync_cycle}
+            onChange={(value) => onToggleCycleSync(status.provider, value)}
+          />
+        </div>
+      )}
+
       {isOura && showSetup && !status.connected && (
         <OuraTokenForm t={t} isBusy={isBusy} onSubmit={onConnectOuraToken} />
       )}
@@ -331,6 +345,7 @@ export function IntegrationsView({
   onCreateAppleToken,
   onSync,
   onDisconnect,
+  onToggleCycleSync,
 }: {
   t: T;
   locale: string;
@@ -343,6 +358,7 @@ export function IntegrationsView({
   onCreateAppleToken: () => void;
   onSync: (provider: WearableProvider) => void;
   onDisconnect: (provider: WearableProvider) => void;
+  onToggleCycleSync: (provider: WearableProvider, enabled: boolean) => void;
 }) {
   const ordered = PROVIDER_ORDER.map((provider) =>
     statuses.find((status) => status.provider === provider),
@@ -375,6 +391,7 @@ export function IntegrationsView({
           onCreateAppleToken={onCreateAppleToken}
           onSync={onSync}
           onDisconnect={onDisconnect}
+          onToggleCycleSync={onToggleCycleSync}
         />
       ))}
 

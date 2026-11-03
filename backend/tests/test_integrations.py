@@ -1349,10 +1349,13 @@ def test_oura_needs_a_registered_application(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_oura_does_not_ask_for_scopes_it_never_uses(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Oura presents "personal" to the player as height, weight and biological
+    sex. Nothing on the OAuth path reads it, so it must not be requested."""
     monkeypatch.delenv("OURA_SCOPES", raising=False)
     granted = oura.scopes().split()
     assert "session" not in granted
-    assert set(granted) == {"personal", "daily", "heartrate", "workout"}
+    assert "personal" not in granted
+    assert set(granted) == {"daily", "heartrate", "workout"}
 
 
 def test_oura_scopes_can_be_overridden_without_a_deploy(

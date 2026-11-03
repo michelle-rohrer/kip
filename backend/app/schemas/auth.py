@@ -39,6 +39,7 @@ class UserResponse(BaseModel):
     training_uid: str | None = None
     player_position: str | None = None
     name: str
+    is_test_account: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

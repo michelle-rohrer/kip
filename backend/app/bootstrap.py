@@ -83,6 +83,29 @@ def ensure_coach(session: Session) -> str:
     return f"coach: created '{username}' for team '{team.name}'"
 
 
+def apply_test_accounts(session: Session) -> str:
+    """Flag the usernames in ``BOOTSTRAP_TEST_PLAYERS`` as test accounts.
+
+    The list is authoritative: anybody on it is flagged, anybody flagged who
+    is no longer on it is unflagged. That way the setting lives in one place
+    and survives a rebuilt database, instead of being a one-off edit in the
+    table that nobody can find again later.
+    """
+    wanted = {name.lower() for name in _split_env_list(os.getenv("BOOTSTRAP_TEST_PLAYERS", ""))}
+    changed: list[str] = []
+
+    for user in session.execute(select(User)).scalars().all():
+        should_flag = user.username.lower() in wanted
+        if user.is_test_account != should_flag:
+            user.is_test_account = should_flag
+            changed.append(f"{'+' if should_flag else '-'}{user.username}")
+
+    if changed:
+        session.commit()
+        return "test accounts: " + ", ".join(changed)
+    return f"test accounts: nothing to do ({len(wanted)} configured)"
+
+
 def bootstrap() -> None:
     team_names = _split_env_list(os.getenv("BOOTSTRAP_TEAMS", DEFAULT_TEAMS))
     with SessionLocal() as session:
@@ -96,6 +119,7 @@ def bootstrap() -> None:
             )
         )
         print(ensure_coach(session))
+        print(apply_test_accounts(session))
 
 
 if __name__ == "__main__":

@@ -150,6 +150,8 @@ export type WearableDaily = {
   steps: number | null;
   active_calories: number | null;
   workout_minutes: number | null;
+  workout_sport: string | null;
+  menstrual_flow: string | null;
 };
 
 export type WellnessSuggestion = {

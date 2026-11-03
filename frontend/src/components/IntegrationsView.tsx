@@ -444,6 +444,27 @@ export function IntegrationsView({
                       label: t.steps,
                       value: row.steps === null ? null : row.steps.toLocaleString(locale),
                     },
+                    {
+                      key: "workout",
+                      label: t.trainingLoad,
+                      value:
+                        row.workout_minutes === null
+                          ? null
+                          : [
+                              row.workout_sport,
+                              `${Math.round(row.workout_minutes)} ${t.minutesShort}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · "),
+                    },
+                    {
+                      key: "flow",
+                      label: t.period,
+                      value:
+                        row.menstrual_flow === null
+                          ? null
+                          : (t[`flow_${row.menstrual_flow}`] ?? row.menstrual_flow),
+                    },
                   ]
                     .filter((item) => item.value !== null)
                     .map((item) => (

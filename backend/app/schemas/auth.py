@@ -54,5 +54,11 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class AccountDeleteRequest(BaseModel):
+    """Deleting an account is irreversible, so it asks for the password again."""
+
+    password: str = Field(min_length=1, max_length=128)
+
+
 class MessageResponse(BaseModel):
     detail: str

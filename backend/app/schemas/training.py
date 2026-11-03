@@ -12,7 +12,6 @@ class TrainingEntryCreate(BaseModel):
     intensity: int | None = Field(default=None, ge=1, le=10)
     session_rpe: int | None = Field(default=None, ge=0, le=10)
     session_type: str | None = Field(default=None, max_length=32)
-    jump_count: int | None = Field(default=None, ge=0, le=2000)
     participation_status: str | None = Field(default=None, max_length=32)
     strength_values: dict[str, Any] | None = None
 
@@ -35,7 +34,6 @@ class TrainingEntryResponse(BaseModel):
     intensity: int | None
     session_rpe: int | None
     session_type: str | None
-    jump_count: int | None = None
     participation_status: str | None = None
     strength_values: dict[str, Any] | None
 

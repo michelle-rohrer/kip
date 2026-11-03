@@ -23,7 +23,9 @@ from app.db import SessionLocal
 from app.models import Team, User, UserRole
 from app.services.auth import hash_password
 
-DEFAULT_TEAMS = "BTV Aarau F1,Eaglets NNV"
+# One team by default. A coach only ever sees her own team, so a second entry
+# here quietly splits the squad into a visible and an invisible half.
+DEFAULT_TEAMS = "BTV Aarau F1"
 
 
 def _split_env_list(raw: str) -> list[str]:

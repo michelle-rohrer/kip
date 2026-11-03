@@ -58,8 +58,14 @@ def _summary(summary: wearables.SyncSummary) -> SyncResponse:
 
 
 def _wearable_http_error(exc: WearableError) -> HTTPException:
+    """Map a provider failure onto a status the app can act on.
+
+    A rejected Whoop or Oura token is not a VolleySync login problem, so it
+    must not be a 401 - the app reads that as "your session ended" and would
+    sign the player out for pasting the wrong Oura token.
+    """
     code = (
-        status.HTTP_401_UNAUTHORIZED
+        status.HTTP_409_CONFLICT
         if isinstance(exc, WearableAuthError)
         else status.HTTP_502_BAD_GATEWAY
     )

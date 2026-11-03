@@ -128,6 +128,7 @@ function App() {
   const [suggestion, setSuggestion] = useState<WellnessSuggestion | null>(null);
   const [appleToken, setAppleToken] = useState<AppleHealthToken | null>(null);
   const [busyProvider, setBusyProvider] = useState<WearableProvider | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const [wellnessForm, setWellnessForm] = useState<WellnessForm>({
     date: todayIso(),
@@ -159,7 +160,6 @@ function App() {
     session_rpe: 6,
     session_type: "team",
     participation_status: "full",
-    jump_count: "",
   });
   const [injuryForm, setInjuryForm] = useState<InjuryForm>({
     date: todayIso(),
@@ -663,7 +663,6 @@ function App() {
           session_rpe: trainingForm.session_rpe,
           session_type: trainingForm.session_type,
           participation_status: trainingForm.participation_status,
-          jump_count: trainingForm.jump_count ? Number(trainingForm.jump_count) : null,
         }),
       });
       pushToast(t.trainingSaved, "success");
@@ -805,6 +804,32 @@ function App() {
       pushToast(describeError(error, t.deviceDisconnectFailed), "error");
     } finally {
       setBusyProvider(null);
+    }
+  }
+
+  async function handleDeleteAccount(password: string) {
+    setIsDeletingAccount(true);
+    try {
+      await apiRequest<void>("/api/auth/me", {
+        method: "DELETE",
+        body: JSON.stringify({ password }),
+      });
+      // The account is gone, so there is nothing left to log out of - drop the
+      // tokens locally and go back to the login screen.
+      setTokens(null);
+      resetSessionState();
+      setTab("dashboard");
+      pushToast(t.accountDeleted, "info");
+    } catch (error) {
+      // The server answers 403 for a wrong confirmation password; its English
+      // detail text has no place in a dialog this consequential.
+      const message =
+        error instanceof ApiError && error.status === 403
+          ? t.deleteAccountWrongPassword
+          : describeError(error, t.deleteAccountFailed);
+      pushToast(message, "error");
+    } finally {
+      setIsDeletingAccount(false);
     }
   }
 
@@ -1005,6 +1030,8 @@ function App() {
               )
             }
             onSave={(consent) => void handlePrivacySave(consent)}
+            isDeleting={isDeletingAccount}
+            onDeleteAccount={(password) => void handleDeleteAccount(password)}
           />
         )}
 

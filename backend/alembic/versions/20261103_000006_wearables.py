@@ -3,8 +3,8 @@
 Adds:
   * ``wearable_connections`` - one row per player and provider
   * ``wearable_daily``       - one row per player, day and provider
-  * ``training_entries.jump_count`` / ``participation_status`` - re-added after
-    migration 20260428_000004 dropped them while the form kept collecting them
+  * ``training_entries.participation_status`` - re-added after migration
+    20260428_000004 dropped it while the form kept collecting it
 
 Revision ID: 20261103_000006
 Revises: 20260824_000005
@@ -111,14 +111,12 @@ def upgrade() -> None:
     op.create_index("ix_wearable_daily_date", "wearable_daily", ["date"], unique=False)
 
     with op.batch_alter_table("training_entries") as batch_op:
-        batch_op.add_column(sa.Column("jump_count", sa.Integer(), nullable=True))
         batch_op.add_column(sa.Column("participation_status", sa.String(length=32), nullable=True))
 
 
 def downgrade() -> None:
     with op.batch_alter_table("training_entries") as batch_op:
         batch_op.drop_column("participation_status")
-        batch_op.drop_column("jump_count")
 
     op.drop_index("ix_wearable_daily_date", table_name="wearable_daily")
     op.drop_index("ix_wearable_daily_player_id", table_name="wearable_daily")

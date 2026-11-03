@@ -253,7 +253,10 @@ def _cycle_days(records: list[dict[str, Any]]) -> list[DailyMetrics]:
 
 
 def _workout_days(records: list[dict[str, Any]]) -> list[DailyMetrics]:
+    """Day totals plus the longest session's sport, for the training prefill."""
     minutes_by_day: dict[date, float] = {}
+    longest: dict[date, tuple[float, str]] = {}
+
     for record in records:
         day = _local_day(record.get("start"), record.get("timezone_offset"))
         started = _parse_instant(record.get("start"))
@@ -261,10 +264,21 @@ def _workout_days(records: list[dict[str, Any]]) -> list[DailyMetrics]:
         if day is None or started is None or ended is None:
             continue
         minutes = (ended - started).total_seconds() / 60.0
-        if minutes > 0:
-            minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+        if minutes <= 0:
+            continue
+        minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+
+        sport = record.get("sport_name") or record.get("sport")
+        if isinstance(sport, str) and sport.strip():
+            if day not in longest or minutes > longest[day][0]:
+                longest[day] = (minutes, sport.strip()[:64])
+
     return [
-        DailyMetrics(day=day, workout_minutes=round(minutes, 1))
+        DailyMetrics(
+            day=day,
+            workout_minutes=round(minutes, 1),
+            workout_sport=longest.get(day, (0.0, None))[1],
+        )
         for day, minutes in minutes_by_day.items()
     ]
 

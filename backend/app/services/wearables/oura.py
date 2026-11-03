@@ -31,6 +31,7 @@ from app.services.wearables.base import (
     as_int,
     clamp_score,
     merge_days,
+    normalise_flow,
 )
 
 PROVIDER = "oura"
@@ -281,7 +282,10 @@ def _activity_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
 
 
 def _workout_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
+    """Day totals plus the longest session's activity, for the training prefill."""
     minutes_by_day: dict[date, float] = {}
+    longest: dict[date, tuple[float, str]] = {}
+
     for document in documents:
         day = _parse_day(document.get("day"))
         start_text = document.get("start_datetime")
@@ -294,26 +298,62 @@ def _workout_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
         except ValueError:
             continue
         minutes = (ended - started).total_seconds() / 60.0
-        if minutes > 0:
-            minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+        if minutes <= 0:
+            continue
+        minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+
+        activity = document.get("activity") or document.get("label")
+        if isinstance(activity, str) and activity.strip():
+            if day not in longest or minutes > longest[day][0]:
+                longest[day] = (minutes, activity.strip()[:64])
+
     return [
-        DailyMetrics(day=day, workout_minutes=round(minutes, 1))
+        DailyMetrics(
+            day=day,
+            workout_minutes=round(minutes, 1),
+            workout_sport=longest.get(day, (0.0, None))[1],
+        )
         for day, minutes in minutes_by_day.items()
     ]
 
 
-def fetch_daily(*, access_token: str, start: date, end: date) -> list[DailyMetrics]:
+def _cycle_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
+    """Oura Cycle Insights, when the account has it.
+
+    The endpoint is missing for accounts without the feature; the caller turns
+    a 404 into an empty list, so this simply contributes nothing then.
+    """
+    out: list[DailyMetrics] = []
+    for document in documents:
+        day = _parse_day(document.get("day"))
+        if day is None:
+            continue
+        flow = normalise_flow(document.get("period_flow") or document.get("flow"))
+        if flow is None and str(document.get("cycle_phase", "")).lower() == "menstrual":
+            flow = "medium"
+        if flow is None:
+            continue
+        out.append(DailyMetrics(day=day, menstrual_flow=flow, raw={"daily_cycle_phases": document}))
+    return out
+
+
+def fetch_daily(
+    *, access_token: str, start: date, end: date, with_cycle: bool = False
+) -> list[DailyMetrics]:
     def collect(collection: str) -> list[dict[str, Any]]:
         return _get_documents(
             collection=collection, access_token=access_token, start=start, end=end
         )
 
-    return merge_days(
-        [
-            _sleep_detail_days(collect("sleep")),
-            _daily_sleep_days(collect("daily_sleep")),
-            _readiness_days(collect("daily_readiness")),
-            _activity_days(collect("daily_activity")),
-            _workout_days(collect("workout")),
-        ]
-    )
+    batches = [
+        _sleep_detail_days(collect("sleep")),
+        _daily_sleep_days(collect("daily_sleep")),
+        _readiness_days(collect("daily_readiness")),
+        _activity_days(collect("daily_activity")),
+        _workout_days(collect("workout")),
+    ]
+    if with_cycle:
+        # Cycle Insights is not part of every Oura account; a 404 comes back as
+        # an empty list, so this is simply skipped where it is unavailable.
+        batches.append(_cycle_days(collect("daily_cycle_phases")))
+    return merge_days(batches)

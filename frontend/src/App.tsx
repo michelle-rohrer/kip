@@ -24,8 +24,8 @@ import {
   User,
   WearableDaily,
   WearableProvider,
+  DeviceSuggestions,
   WellnessEntry,
-  WellnessSuggestion,
 } from "./types";
 import { num, todayIso } from "./utils";
 import { AppShell, Logo, NavItem } from "./components/Shell";
@@ -125,7 +125,7 @@ function App() {
 
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [wearableDaily, setWearableDaily] = useState<WearableDaily[]>([]);
-  const [suggestion, setSuggestion] = useState<WellnessSuggestion | null>(null);
+  const [suggestion, setSuggestion] = useState<DeviceSuggestions | null>(null);
   const [appleToken, setAppleToken] = useState<AppleHealthToken | null>(null);
   const [busyProvider, setBusyProvider] = useState<WearableProvider | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -306,7 +306,7 @@ function App() {
     const [statusRes, dailyRes, suggestionRes] = await Promise.allSettled([
       apiRequest<IntegrationStatus[]>("/api/integrations/"),
       apiRequest<WearableDaily[]>("/api/integrations/daily"),
-      apiRequest<WellnessSuggestion>(
+      apiRequest<DeviceSuggestions>(
         `/api/integrations/suggestion?date=${encodeURIComponent(forDate)}`,
       ),
     ]);
@@ -484,7 +484,7 @@ function App() {
   useEffect(() => {
     if (user?.role !== "player") return;
     let cancelled = false;
-    apiRequest<WellnessSuggestion>(
+    apiRequest<DeviceSuggestions>(
       `/api/integrations/suggestion?date=${encodeURIComponent(wellnessForm.date)}`,
     )
       .then((value) => {
@@ -833,14 +833,58 @@ function App() {
     }
   }
 
-  function handleApplySuggestion() {
-    if (!suggestion) return;
+  function handleApplyWellnessSuggestion() {
+    const values = suggestion?.wellness;
+    if (!values) return;
     setWellnessForm((prev) => ({
       ...prev,
-      sleep_hours: suggestion.sleep_hours ?? prev.sleep_hours,
-      sleep_quality: suggestion.sleep_quality ?? prev.sleep_quality,
+      sleep_hours: values.sleep_hours ?? prev.sleep_hours,
+      sleep_quality: values.sleep_quality ?? prev.sleep_quality,
     }));
     pushToast(t.suggestionApplied, "success");
+  }
+
+  function handleApplyTrainingSuggestion() {
+    const values = suggestion?.training;
+    if (!values) return;
+    setTrainingForm((prev) => ({
+      ...prev,
+      duration_min: values.duration_min ?? prev.duration_min,
+      intensity: values.intensity ?? prev.intensity,
+      // Only overwrite the session type when the device named a sport we know;
+      // otherwise the player's own choice stands.
+      session_type:
+        (values.session_type as TrainingForm["session_type"] | null) ?? prev.session_type,
+    }));
+    pushToast(t.suggestionApplied, "success");
+  }
+
+  function handleApplyCycleSuggestion() {
+    const values = suggestion?.cycle;
+    if (!values) return;
+    setCycleForm((prev) => ({
+      ...prev,
+      cycle_day: values.cycle_day ?? prev.cycle_day,
+      phase: values.phase ?? prev.phase,
+      cycle_length: values.cycle_length ?? prev.cycle_length,
+    }));
+    pushToast(t.suggestionApplied, "success");
+  }
+
+  async function handleToggleCycleSync(provider: WearableProvider, enabled: boolean) {
+    setBusyProvider(provider);
+    try {
+      await apiRequest<IntegrationStatus>(
+        `/api/integrations/${provider.replace("_", "-")}/cycle-sync`,
+        { method: "PUT", body: JSON.stringify({ enabled }) },
+      );
+      pushToast(enabled ? t.cycleSyncOn : t.cycleSyncOff, "success");
+      await refreshIntegrations();
+    } catch (error) {
+      pushToast(describeError(error, t.deviceConnectFailed), "error");
+    } finally {
+      setBusyProvider(null);
+    }
   }
 
   /* -------------------------------------------------------------- render */
@@ -964,7 +1008,7 @@ function App() {
             isLoading={isLoading}
             entries={wellness}
             suggestion={suggestion}
-            onApplySuggestion={handleApplySuggestion}
+            onApplySuggestion={handleApplyWellnessSuggestion}
           />
         )}
 
@@ -977,6 +1021,8 @@ function App() {
             onSubmit={handleCycleSubmit}
             isLoading={isLoading}
             entries={cycle}
+            suggestion={suggestion}
+            onApplySuggestion={handleApplyCycleSuggestion}
           />
         )}
 
@@ -989,6 +1035,8 @@ function App() {
             onSubmit={handleTrainingSubmit}
             isLoading={isLoading}
             entries={training}
+            suggestion={suggestion}
+            onApplySuggestion={handleApplyTrainingSuggestion}
           />
         )}
 
@@ -1017,6 +1065,7 @@ function App() {
             onCreateAppleToken={() => void handleCreateAppleToken()}
             onSync={(provider) => void handleSyncProvider(provider)}
             onDisconnect={(provider) => void handleDisconnectProvider(provider)}
+            onToggleCycleSync={(provider, enabled) => void handleToggleCycleSync(provider, enabled)}
           />
         )}
 

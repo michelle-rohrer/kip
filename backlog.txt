@@ -5,5 +5,15 @@ in EInstellungen Passwort ändern
 alles zu ä,ü,ö ändern
 Privacy regeln, damit ich mit den Daten arbeiten darf
 klären was Seed Standard ist beim Registrieren
-Irgendwie sowas wie ein Tier zur Streak eêrstellen (also wie viele Tage man es hinteriennader eingetragen hat) und vielleicht ein Ranking oder so
+Streak zur Challenge ausbauen: Rangliste im Team (auf welchem Platz bin ich),
+  Stufen/Tiers statt nur Tageszahl, damit es Spass macht
+  - offen: zaehlt Wellness allein oder alle Eintraege?
+  - offen: Rangliste mit Namen oder anonym (Platz 3 von 14) - Spielerinnen
+    sollen sich nicht blossgestellt fuehlen, nur weil sie zwei Tage ausliessen
+  - Freigabe noetig? Der Streak selbst ist kein Gesundheitswert, aber eine
+    Rangliste macht Teilnahme oeffentlich
 Zyklus so ändern, dass man einfach nur Periode eintragen muss und der Rest wird selber errechnet
+  - TEILWEISE ERLEDIGT: die Berechnung gibt es jetzt (app/services/wearables/cycle.py),
+    sie laeuft aber nur fuer Periodentage, die vom Geraet kommen.
+    Offen: dieselbe Ableitung auch auf manuell eingetragene Periodentage anwenden,
+    dann faellt die Eingabe von Zyklustag/Phase/Laenge im Formular ganz weg.

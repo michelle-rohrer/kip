@@ -296,6 +296,10 @@ class WearableConnection(Base):
     scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
     external_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     ingest_token_hash: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    # Cycle data is the most sensitive category in the app, so taking it from a
+    # device is off until the player turns it on - per provider, because she
+    # may well trust one app with it and not another.
+    sync_cycle: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_sync_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -344,6 +348,12 @@ class WearableDaily(Base):
     steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     active_calories: Mapped[float | None] = mapped_column(Float, nullable=True)
     workout_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # What the device called the session ("volleyball", "weightlifting", ...).
+    # Used to pre-fill the session type, never to decide anything on its own.
+    workout_sport: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # "none" | "light" | "medium" | "heavy" - only ever written when the player
+    # switched cycle sync on for that provider.
+    menstrual_flow: Mapped[str | None] = mapped_column(String(16), nullable=True)
     raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False

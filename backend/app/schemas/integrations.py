@@ -10,6 +10,8 @@ class IntegrationStatus(BaseModel):
     connected: bool
     configured: bool
     supports_oauth: bool
+    # Cycle data is only taken from a device once the player says so, per provider.
+    sync_cycle: bool = False
     last_sync_at: datetime | None = None
     last_sync_status: str | None = None
     last_error: str | None = None
@@ -59,6 +61,8 @@ class WearableDailyResponse(BaseModel):
     steps: int | None = None
     active_calories: float | None = None
     workout_minutes: float | None = None
+    workout_sport: str | None = None
+    menstrual_flow: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -69,12 +73,42 @@ class WearableDailyResponse(BaseModel):
         return value.value if isinstance(value, enum.Enum) else value
 
 
-class WellnessSuggestionResponse(BaseModel):
-    date: date
-    sources: list[str] = []
+class SyncCycleRequest(BaseModel):
+    """Turn cycle sync on or off for one provider."""
+
+    enabled: bool
+
+
+class WellnessSuggestion(BaseModel):
     sleep_hours: float | None = None
     sleep_quality: int | None = None
     readiness_score: int | None = None
     hrv_ms: float | None = None
     resting_hr: float | None = None
     strain: float | None = None
+
+
+class TrainingSuggestion(BaseModel):
+    duration_min: int | None = None
+    # Only present when the device measured strain.
+    intensity: int | None = None
+    # Only present when the sport is one the app recognises.
+    session_type: str | None = None
+    sport: str | None = None
+
+
+class CycleSuggestion(BaseModel):
+    cycle_day: int | None = None
+    phase: str | None = None
+    cycle_length: int | None = None
+    flow: str | None = None
+
+
+class SuggestionResponse(BaseModel):
+    """Everything the forms can prefill for one day, in one call."""
+
+    date: date
+    sources: list[str] = []
+    wellness: WellnessSuggestion | None = None
+    training: TrainingSuggestion | None = None
+    cycle: CycleSuggestion | None = None

@@ -127,6 +127,8 @@ export type IntegrationStatus = {
   configured: boolean;
   /** OAuth is available, so the player never has to paste a token. */
   supports_oauth: boolean;
+  /** Cycle data is only taken from this provider once the player allows it. */
+  sync_cycle: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
   last_error: string | null;
@@ -148,17 +150,42 @@ export type WearableDaily = {
   steps: number | null;
   active_calories: number | null;
   workout_minutes: number | null;
+  workout_sport: string | null;
+  menstrual_flow: string | null;
 };
 
 export type WellnessSuggestion = {
-  date: string;
-  sources: WearableProvider[];
   sleep_hours: number | null;
   sleep_quality: number | null;
   readiness_score: number | null;
   hrv_ms: number | null;
   resting_hr: number | null;
   strain: number | null;
+};
+
+export type TrainingSuggestion = {
+  duration_min: number | null;
+  /** Only present when the device measured strain. */
+  intensity: number | null;
+  /** Only present when the sport is one the app recognises. */
+  session_type: string | null;
+  sport: string | null;
+};
+
+export type CycleSuggestion = {
+  cycle_day: number | null;
+  phase: CyclePhase | null;
+  cycle_length: number | null;
+  flow: string | null;
+};
+
+/** What the three forms can prefill for one day, from one call. */
+export type DeviceSuggestions = {
+  date: string;
+  sources: WearableProvider[];
+  wellness: WellnessSuggestion | null;
+  training: TrainingSuggestion | null;
+  cycle: CycleSuggestion | null;
 };
 
 export type AppleHealthToken = {

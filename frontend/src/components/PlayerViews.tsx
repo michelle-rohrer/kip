@@ -6,10 +6,10 @@ import {
   Prediction,
   PrivacyConsent,
   TrainingEntry,
+  DeviceSuggestions,
   User,
   WearableDaily,
   WellnessEntry,
-  WellnessSuggestion,
 } from "../types";
 import {
   computeStreak,
@@ -146,6 +146,29 @@ function HistoryRow({
       </div>
       {meta && <span className="shrink-0 text-xs font-semibold text-subtle">{meta}</span>}
     </li>
+  );
+}
+
+/**
+ * Values a device measured, offered for the form the player is looking at.
+ * Nothing is stored until she presses the button - the device measures, she
+ * decides.
+ */
+function SuggestionBanner({ t, parts, onApply }: { t: T; parts: string[]; onApply: () => void }) {
+  if (parts.length === 0) return null;
+  return (
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ok/40 bg-ok-soft/60 p-4">
+      <div className="min-w-0">
+        <p className="flex items-center gap-2 text-sm font-bold text-ink">
+          <IconWatch size={16} className="text-ok" />
+          {t.suggestionTitle}
+        </p>
+        <p className="mt-0.5 text-xs leading-snug text-muted">{parts.join(" · ")}</p>
+      </div>
+      <Button type="button" variant="secondary" icon={<IconCheck size={16} />} onClick={onApply}>
+        {t.applySuggestion}
+      </Button>
+    </div>
   );
 }
 
@@ -538,9 +561,18 @@ export function WellnessView({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isLoading: boolean;
   entries: WellnessEntry[];
-  suggestion: WellnessSuggestion | null;
+  suggestion: DeviceSuggestions | null;
   onApplySuggestion: () => void;
 }) {
+  const w = suggestion?.wellness ?? null;
+  const wellnessSuggestionParts = !w
+    ? []
+    : [
+        w.sleep_hours === null ? null : `${t.sleep} ${w.sleep_hours.toFixed(1)} h`,
+        w.sleep_quality === null ? null : `${t.sleepQuality} ${w.sleep_quality}/10`,
+        w.readiness_score === null ? null : `${t.readiness} ${w.readiness_score}`,
+      ].filter((part): part is string => part !== null);
+
   const sliders: Array<{
     key: keyof WellnessForm;
     label: string;
@@ -564,39 +596,7 @@ export function WellnessView({
           tone="brand"
         />
 
-        {suggestion && (
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ok/40 bg-ok-soft/60 p-4">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm font-bold text-ink">
-                <IconWatch size={16} className="text-ok" />
-                {t.suggestionTitle}
-              </p>
-              <p className="mt-0.5 text-xs leading-snug text-muted">
-                {[
-                  suggestion.sleep_hours === null
-                    ? null
-                    : `${t.sleep} ${suggestion.sleep_hours.toFixed(1)} h`,
-                  suggestion.sleep_quality === null
-                    ? null
-                    : `${t.sleepQuality} ${suggestion.sleep_quality}/10`,
-                  suggestion.readiness_score === null
-                    ? null
-                    : `${t.readiness} ${suggestion.readiness_score}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              icon={<IconCheck size={16} />}
-              onClick={onApplySuggestion}
-            >
-              {t.applySuggestion}
-            </Button>
-          </div>
-        )}
+        <SuggestionBanner t={t} parts={wellnessSuggestionParts} onApply={onApplySuggestion} />
 
         <form className="space-y-6" onSubmit={onSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -683,6 +683,8 @@ export function CycleView({
   onSubmit,
   isLoading,
   entries,
+  suggestion,
+  onApplySuggestion,
 }: {
   t: T;
   locale: string;
@@ -691,7 +693,18 @@ export function CycleView({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isLoading: boolean;
   entries: CycleEntry[];
+  suggestion: DeviceSuggestions | null;
+  onApplySuggestion: () => void;
 }) {
+  const cy = suggestion?.cycle ?? null;
+  const suggestionParts = !cy
+    ? []
+    : [
+        cy.cycle_day === null ? null : `${t.cycleDay} ${cy.cycle_day}`,
+        cy.phase === null ? null : mapPhaseLabel(cy.phase, t),
+        cy.cycle_length === null ? null : `${t.cycleLength} ${cy.cycle_length}`,
+      ].filter((part): part is string => Boolean(part));
+
   const phases: Array<{ value: CyclePhase; label: string }> = [
     { value: "menstruation", label: t.phaseMenstruation },
     { value: "follicular", label: t.phaseFollicular },
@@ -708,6 +721,7 @@ export function CycleView({
           icon={<IconDrop size={20} />}
           tone="bloom"
         />
+        <SuggestionBanner t={t} parts={suggestionParts} onApply={onApplySuggestion} />
         <form className="space-y-6" onSubmit={onSubmit}>
           <Field label={t.date}>
             <TextInput
@@ -839,6 +853,8 @@ export function TrainingView({
   onSubmit,
   isLoading,
   entries,
+  suggestion,
+  onApplySuggestion,
 }: {
   t: T;
   locale: string;
@@ -847,13 +863,24 @@ export function TrainingView({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isLoading: boolean;
   entries: TrainingEntry[];
+  suggestion: DeviceSuggestions | null;
+  onApplySuggestion: () => void;
 }) {
   const durations = [45, 60, 75, 90, 120];
+  const tr = suggestion?.training ?? null;
+  const suggestionParts = !tr
+    ? []
+    : [
+        tr.duration_min === null ? null : `${tr.duration_min} ${t.minutesShort}`,
+        tr.sport,
+        tr.intensity === null ? null : `${t.intensityLabel} ${tr.intensity}/10`,
+      ].filter((part): part is string => Boolean(part));
 
   return (
     <>
       <Card className="animate-fadeUp">
         <CardHeader title={t.trainingEntry} icon={<IconDumbbell size={20} />} tone="iris" />
+        <SuggestionBanner t={t} parts={suggestionParts} onApply={onApplySuggestion} />
         <form className="space-y-6" onSubmit={onSubmit}>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label={t.date}>

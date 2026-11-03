@@ -8,7 +8,7 @@ Ziel: Deine Spielerinnen oeffnen einen Link auf dem Handy, loggen sich ein und t
 | --- | --- | --- |
 | Datenbank (PostgreSQL) | [Neon](https://neon.tech) | gratis |
 | Backend (FastAPI) | [Render](https://render.com) Web Service, Plan *Starter* | ca. 7 USD/Monat |
-| Frontend (React) | Render Static Site | gratis |
+| Frontend (React) | [Vercel](https://vercel.com) (laeuft bereits) oder Render Static Site | gratis |
 
 Der Starter-Plan ist bewusst gewaehlt: Der Gratis-Plan von Render schlaeft nach 15 Minuten ein, der erste
 Aufruf dauert dann bis zu einer Minute. Mit *Starter* ist die App sofort da.

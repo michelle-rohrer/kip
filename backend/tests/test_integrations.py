@@ -638,7 +638,7 @@ def test_oauth_callback_stores_tokens_and_returns_to_the_app(
             access_token="whoop-access",
             refresh_token="whoop-refresh",
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-            scope=whoop.SCOPES,
+            scope=whoop.scopes(),
             external_user_id="whoop-user-9",
         ),
     )
@@ -1283,3 +1283,51 @@ def test_strain_becomes_an_intensity(
     assert intensity_from_strain(0.0) == 1
     assert intensity_from_strain(10.5) == 5
     assert intensity_from_strain(21.0) == 10
+
+
+def test_whoop_does_not_ask_for_scopes_it_never_uses(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Whoop refuses the whole authorisation when one scope is not enabled.
+
+    Asking for "read:profile" - which no call here needs - cost a working
+    connection with nothing but `invalid_scope` to show for it.
+    """
+    monkeypatch.delenv("WHOOP_SCOPES", raising=False)
+    granted = whoop.scopes().split()
+    assert "read:profile" not in granted
+    assert set(granted) == {
+        "read:recovery",
+        "read:cycles",
+        "read:sleep",
+        "read:workout",
+        "offline",
+    }
+
+
+def test_whoop_scopes_can_be_overridden_without_a_deploy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WHOOP_SCOPES", "read:sleep offline")
+    assert whoop.scopes() == "read:sleep offline"
+    monkeypatch.setenv("WHOOP_SCOPES", "   ")
+    assert "read:recovery" in whoop.scopes()
+
+
+def test_a_refused_authorisation_explains_itself(
+    api_client: TestClient, player: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bare code says "invalid_scope"; the hint says which scope."""
+    monkeypatch.setenv("FRONTEND_BASE_URL", "https://app.example.com")
+    res = api_client.get(
+        "/api/integrations/callback/whoop",
+        params={
+            "error": "invalid_scope",
+            "error_description": "The requested scope is invalid",
+            "error_hint": 'The OAuth 2.0 Client is not allowed to request scope "read:profile"',
+        },
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    location = res.headers["location"]
+    assert "status=denied" in location
+    assert "invalid_scope" in location
+    assert "read%3Aprofile" in location or "read:profile" in location

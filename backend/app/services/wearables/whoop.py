@@ -31,7 +31,18 @@ from app.services.wearables.base import (
 
 PROVIDER = "whoop"
 DEFAULT_API_BASE = "https://api.prod.whoop.com"
-SCOPES = "read:recovery read:cycles read:sleep read:workout read:profile offline"
+# Exactly the scopes the four endpoints below need - nothing more. "read:profile"
+# used to be in here and was never called; Whoop rejects the whole authorisation
+# with invalid_scope when an app has not enabled a requested scope, so asking for
+# something unused costs a working connection for no benefit.
+# Override with WHOOP_SCOPES if Whoop renames them.
+DEFAULT_SCOPES = "read:recovery read:cycles read:sleep read:workout offline"
+
+
+def scopes() -> str:
+    return os.getenv("WHOOP_SCOPES", DEFAULT_SCOPES).strip() or DEFAULT_SCOPES
+
+
 REQUEST_TIMEOUT = 30.0
 PAGE_LIMIT = 25
 MAX_PAGES = 20
@@ -59,7 +70,7 @@ def authorize_url(*, state: str, redirect_uri: str) -> str:
             "client_id": client_id(),
             "redirect_uri": redirect_uri,
             "response_type": "code",
-            "scope": SCOPES,
+            "scope": scopes(),
             "state": state,
         }
     )
@@ -89,7 +100,7 @@ def _token_request(form: dict[str, str]) -> TokenBundle:
         access_token=access_token,
         refresh_token=payload.get("refresh_token"),
         expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
-        scope=payload.get("scope") or SCOPES,
+        scope=payload.get("scope") or scopes(),
         external_user_id=(
             str(payload["user_id"]) if payload.get("user_id") not in (None, "") else None
         ),

@@ -109,6 +109,7 @@ def start_authorization(
 @router.get("/callback/{provider}")
 def oauth_callback(
     provider: str,
+    request: Request,
     db: Session = Depends(get_db),
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
@@ -131,7 +132,18 @@ def oauth_callback(
         )
 
     if error:
-        return back("denied", error)
+        # Whoop and Oura put the useful part in error_description/error_hint;
+        # the bare code ("invalid_scope") does not say which scope.
+        detail = " - ".join(
+            part
+            for part in (
+                error,
+                request.query_params.get("error_description"),
+                request.query_params.get("error_hint"),
+            )
+            if part
+        )
+        return back("denied", detail)
     if not code or not state:
         return back("error", "missing authorization code")
 

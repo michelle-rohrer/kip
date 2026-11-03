@@ -693,6 +693,71 @@ def test_oauth_callback_with_a_stale_state_does_not_connect(
     )
 
 
+def test_oauth_callback_reports_a_rejected_code_as_an_error(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed exchange connected nothing - it must not claim otherwise."""
+    monkeypatch.setattr(
+        whoop,
+        "exchange_code",
+        lambda **kwargs: (_ for _ in ()).throw(WearableAuthError("redirect_uri mismatch")),
+    )
+    state = wearables.build_state_token(player_id=player["id"], provider=WearableProvider.WHOOP)
+    res = api_client.get(
+        "/api/integrations/callback/whoop",
+        params={"code": "auth-code", "state": state},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert "status=error" in res.headers["location"]
+    assert "connected" not in res.headers["location"]
+    assert (
+        wearables.get_connection(
+            db_session, player_id=player["id"], provider=WearableProvider.WHOOP
+        )
+        is None
+    )
+
+
+def test_oauth_callback_keeps_tokens_when_only_the_first_sync_fails(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        whoop,
+        "exchange_code",
+        lambda **kwargs: TokenBundle(
+            access_token="whoop-access",
+            refresh_token="whoop-refresh",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ),
+    )
+    monkeypatch.setattr(
+        whoop,
+        "fetch_daily",
+        lambda **kwargs: (_ for _ in ()).throw(WearableError("Whoop rate limit reached")),
+    )
+    state = wearables.build_state_token(player_id=player["id"], provider=WearableProvider.WHOOP)
+    res = api_client.get(
+        "/api/integrations/callback/whoop",
+        params={"code": "auth-code", "state": state},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert "status=connected_with_warning" in res.headers["location"]
+
+    connection = wearables.get_connection(
+        db_session, player_id=player["id"], provider=WearableProvider.WHOOP
+    )
+    assert connection is not None
+    assert decrypt_secret(connection.access_token) == "whoop-access"
+
+
 def test_oauth_callback_reports_a_declined_consent(api_client: TestClient) -> None:
     res = api_client.get(
         "/api/integrations/callback/whoop",

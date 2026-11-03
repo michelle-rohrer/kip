@@ -144,11 +144,17 @@ def oauth_callback(
             if target is WearableProvider.WHOOP
             else oura.exchange_code(code=code, redirect_uri=callback)
         )
-        connection = wearables.store_tokens(db, player_id=player.id, provider=target, bundle=bundle)
+    except WearableError as exc:
+        # Nothing was linked - usually a redirect URI that does not match the
+        # one registered with the provider.
+        return back("error", str(exc))
+
+    connection = wearables.store_tokens(db, player_id=player.id, provider=target, bundle=bundle)
+    try:
         wearables.sync_connection(db, connection)
     except WearableError as exc:
-        # The link itself worked often enough; report, but keep the tokens so
-        # the player can retry the sync from the app.
+        # The link itself worked; keep the tokens so the player can retry the
+        # first pull from the app instead of connecting all over again.
         return back("connected_with_warning", str(exc))
 
     return back("connected")

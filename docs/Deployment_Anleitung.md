@@ -70,6 +70,13 @@ Im Repo liegt `render.yaml`. Render liest die Datei und erstellt beide Services 
 | `API_BASE_URL` | vorlaeufig `https://volleysync-api.onrender.com` |
 | `FRONTEND_BASE_URL` | vorlaeufig `https://volleysync-app.onrender.com` |
 
+> **Wichtig bei den Teams:** Eine Trainerin sieht nur Spielerinnen **ihres eigenen Teams**.
+> `BOOTSTRAP_TEAMS` steht standardmaessig auf zwei Teams und dein Coach-Konto landet im
+> ersten davon. Wenn du alle Spielerinnen in einer Uebersicht willst, setze
+> `BOOTSTRAP_TEAMS` auf genau **ein** Team – sonst registriert sich die Haelfte in ein
+> Team, das du nicht siehst. Mit `BOOTSTRAP_COACH_TEAM` bestimmst du, in welches Team
+> dein Coach-Konto kommt.
+
 `WEARABLE_ENCRYPTION_KEY` und `CRON_SECRET` erzeugt Render selbst – dort nichts eintragen.
 Die Whoop-/Oura-Variablen bleiben vorerst leer; sie sind nur fuer die Geraete-Anbindung
 noetig (siehe `docs/Wearables_Anleitung.md`) und die App laeuft auch ohne sie.
@@ -229,6 +236,7 @@ keine Rechtsberatung, aber diese Punkte solltest du vorher erledigen:
 | API antwortet mit **400 Invalid host header** | `TRUSTED_HOSTS` falsch | nur Hostname (ohne `https://`) eintragen |
 | Backend startet nicht, Log sagt `JWT_SECRET_KEY must be set` | Secret fehlt oder ist zu kurz | `openssl rand -hex 32` neu setzen |
 | Registrierung zeigt keine Teams | Bootstrap lief nicht | Render Shell: `python -m app.bootstrap` |
+| Coach sieht eine Spielerin nicht | Spielerin hat ein anderes Team gewaehlt | Team der Spielerin in der DB angleichen oder `BOOTSTRAP_TEAMS` auf ein Team reduzieren |
 | Coach-Login geht nicht | Konto fehlt oder Passwort vergessen | `BOOTSTRAP_COACH_RESET_PASSWORD=true` + neues `BOOTSTRAP_COACH_PASSWORD` setzen, deployen, danach die Variable wieder auf `false` |
 | Spielerinnen sehen nach Update die alte Version | Service Worker Cache | Seite einmal neu laden; `index.html`/`sw.js` sind bereits vom Caching ausgenommen |
 | Alles langsam beim ersten Aufruf | Service schlaeft (Gratis-Plan) | Plan `starter` pruefen |

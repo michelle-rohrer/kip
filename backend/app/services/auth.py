@@ -9,7 +9,7 @@ from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Team, User, UserRole
+from app.models import RefreshSession, Team, User, UserRole
 from app.schemas import UserCreate
 from app.schemas.auth import PLAYER_POSITIONS
 
@@ -18,9 +18,6 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", JWT_DEFAULT_SECRET)
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
-
-_revoked_refresh_jtis: set[str] = set()
-_active_refresh_jtis_by_user: dict[int, set[str]] = {}
 
 
 def _now_utc() -> datetime:
@@ -42,9 +39,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
-def _create_token(*, user: User, token_type: str, expires_delta: timedelta) -> str:
+def _create_token(
+    *, user: User, token_type: str, expires_delta: timedelta
+) -> tuple[str, str, datetime]:
     now = _now_utc()
     jti = uuid4().hex
+    expires_at = now + expires_delta
     payload = {
         "sub": str(user.id),
         "username": user.username,
@@ -52,28 +52,30 @@ def _create_token(*, user: User, token_type: str, expires_delta: timedelta) -> s
         "type": token_type,
         "jti": jti,
         "iat": int(now.timestamp()),
-        "exp": int((now + expires_delta).timestamp()),
+        "exp": int(expires_at.timestamp()),
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    if token_type == "refresh":
-        _active_refresh_jtis_by_user.setdefault(user.id, set()).add(jti)
-    return token
+    return token, jti, expires_at
 
 
 def create_access_token(user: User) -> str:
-    return _create_token(
+    token, _, _ = _create_token(
         user=user,
         token_type="access",
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+    return token
 
 
-def create_refresh_token(user: User) -> str:
-    return _create_token(
+def create_refresh_token(db: Session, user: User) -> str:
+    token, jti, expires_at = _create_token(
         user=user,
         token_type="refresh",
         expires_delta=timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
     )
+    db.add(RefreshSession(jti=jti, user_id=user.id, expires_at=expires_at))
+    db.commit()
+    return token
 
 
 def decode_token(token: str, *, expected_type: str | None = None) -> dict:
@@ -155,52 +157,61 @@ def authenticate_user(db: Session, *, username: str, password: str) -> User:
     return user
 
 
-def issue_tokens(user: User) -> tuple[str, str]:
-    return create_access_token(user), create_refresh_token(user)
+def issue_tokens(db: Session, user: User) -> tuple[str, str]:
+    return create_access_token(user), create_refresh_token(db, user)
+
+
+def _load_active_session(db: Session, refresh_token: str) -> tuple[RefreshSession, User]:
+    payload = decode_token(refresh_token, expected_type="refresh")
+    jti = payload.get("jti")
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+    )
+    if jti is None:
+        raise invalid
+
+    session = db.execute(
+        select(RefreshSession).where(RefreshSession.jti == jti)
+    ).scalar_one_or_none()
+    if session is None or session.revoked_at is not None:
+        raise invalid
+
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= _now_utc():
+        raise invalid
+
+    user = db.get(User, session.user_id)
+    if user is None:
+        raise invalid
+    return session, user
+
+
+def _purge_expired_sessions(db: Session) -> None:
+    db.query(RefreshSession).filter(RefreshSession.expires_at < _now_utc()).delete(
+        synchronize_session=False
+    )
 
 
 def refresh_tokens(db: Session, refresh_token: str) -> tuple[str, str]:
-    payload = decode_token(refresh_token, expected_type="refresh")
-    user_id = int(payload["sub"])
-    jti = payload.get("jti")
-
-    if (
-        jti is None
-        or jti in _revoked_refresh_jtis
-        or jti not in _active_refresh_jtis_by_user.get(user_id, set())
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-        )
-
-    user = db.get(User, user_id)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-        )
+    session, user = _load_active_session(db, refresh_token)
 
     # Rotate refresh tokens to reduce replay risk.
-    _revoked_refresh_jtis.add(jti)
-    _active_refresh_jtis_by_user[user_id].discard(jti)
-    return issue_tokens(user)
+    session.revoked_at = _now_utc()
+    _purge_expired_sessions(db)
+    db.commit()
+    return issue_tokens(db, user)
 
 
-def logout_refresh_token(refresh_token: str) -> None:
-    payload = decode_token(refresh_token, expected_type="refresh")
-    user_id = int(payload["sub"])
-    jti = payload.get("jti")
-    if jti is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
-        )
-    _revoked_refresh_jtis.add(jti)
-    _active_refresh_jtis_by_user.get(user_id, set()).discard(jti)
+def logout_refresh_token(db: Session, refresh_token: str) -> None:
+    session, _ = _load_active_session(db, refresh_token)
+    session.revoked_at = _now_utc()
+    db.commit()
 
 
 def reset_auth_state() -> None:
-    _revoked_refresh_jtis.clear()
-    _active_refresh_jtis_by_user.clear()
-    # Keep auth-related in-memory state deterministic across tests/process restarts.
+    # Keep auth-related in-memory state deterministic across tests.
     from app.services.rate_limit import reset_auth_rate_limit_state
 
     reset_auth_rate_limit_state()

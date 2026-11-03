@@ -7,28 +7,29 @@ on:
 
 jobs:
   deploy:
-    name: Trigger staging deploy hooks
+    name: Trigger staging deploy
     runs-on: ubuntu-latest
     steps:
+      # Staging ist optional: nur aktiv, wenn die Deploy-Hooks als GitHub Secrets
+      # hinterlegt sind. Ohne Hooks laeuft der Job einfach durch.
       - name: Trigger backend staging deploy
-        if: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK_URL != '' }}
         env:
           HOOK_URL: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$HOOK_URL"
+        run: |
+          if [ -n "$HOOK_URL" ]; then
+            curl -fsS -X POST "$HOOK_URL"
+            echo "Backend staging deploy ausgeloest."
+          else
+            echo "Kein Staging-Backend-Hook gesetzt - uebersprungen."
+          fi
 
       - name: Trigger frontend staging deploy
-        if: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK_URL != '' }}
         env:
           HOOK_URL: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$HOOK_URL"
-
-      - name: Verify deployment hooks configured
-        env:
-          BACKEND_HOOK: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK_URL }}
-          FRONTEND_HOOK: ${{ secrets.STAGING_FRONTEND_DEPLOY_HOOK_URL }}
         run: |
-          if [ -z "$BACKEND_HOOK" ] || [ -z "$FRONTEND_HOOK" ]; then
-            echo "Missing staging deploy hook secrets."
-            echo "Set STAGING_BACKEND_DEPLOY_HOOK_URL and STAGING_FRONTEND_DEPLOY_HOOK_URL in GitHub repository secrets."
-            exit 1
+          if [ -n "$HOOK_URL" ]; then
+            curl -fsS -X POST "$HOOK_URL"
+            echo "Frontend staging deploy ausgeloest."
+          else
+            echo "Kein Staging-Frontend-Hook gesetzt - uebersprungen."
           fi

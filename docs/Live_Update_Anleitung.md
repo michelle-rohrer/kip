@@ -2,18 +2,22 @@
 
 Diese Anleitung beschreibt, wie du Updates sicher auf Staging und danach auf Production bringst.
 
+> Erstmaliges Live-Stellen (Hosting, Datenbank, Domains): `docs/Deployment_Anleitung.md`
+
 ## 1) Einmalige Voraussetzungen
 
 ### GitHub Secrets setzen
 
-Fuer die Deploy-Workflows muessen im Repository folgende Secrets gesetzt sein:
+Beim Setup ueber `render.yaml` deployt Render nach jedem Push auf `main` automatisch
+(`autoDeploy: true`) - dann sind keine Secrets noetig.
+
+Nur falls du autoDeploy im Render-Dashboard abschaltest, hinterlege die Deploy-Hooks als
+GitHub Secrets; die Workflows nutzen sie dann automatisch:
 
 - `STAGING_BACKEND_DEPLOY_HOOK_URL`
 - `STAGING_FRONTEND_DEPLOY_HOOK_URL`
 - `PRODUCTION_BACKEND_DEPLOY_HOOK_URL`
 - `PRODUCTION_FRONTEND_DEPLOY_HOOK_URL`
-
-Die Werte kommen aus deinem Hosting (z. B. Render/Railway/Vercel Deploy Hooks).
 
 ### Branch-Strategie
 
@@ -54,19 +58,21 @@ Die Werte kommen aus deinem Hosting (z. B. Render/Railway/Vercel Deploy Hooks).
 
 ## 5) Wichtige Sonderfaelle
 
-### A) Migrationen nach Deploy anwenden
+### A) Migrationen
 
-Wenn DB-Felder neu sind, musst du auf dem Zielsystem Migrationen ausfuehren:
+Migrationen laufen bei jedem Start automatisch (`backend/start.sh` fuehrt `alembic upgrade head`
+und danach `python -m app.bootstrap` aus). Von Hand noetig ist das nur, wenn du ausserhalb des
+Containers arbeitest:
 
 - `cd backend && alembic upgrade head`
 
-Ohne diesen Schritt kann das Backend trotz erfolgreichem Deploy Laufzeitfehler werfen.
+Wichtig bleibt: Eine Alembic-Migration muss im PR enthalten sein, sobald sich das Schema aendert.
 
 ### B) Modelltraining nach Daten-/Label-Aenderungen
 
 Nach ML-relevanten Updates:
 
-1. Optional Daten seeden (nur Test/Staging):
+1. Optional Daten seeden (**nur** Test/Staging - loescht in Produktion alle echten Daten!):
    - `cd backend && python -m app.data_generation.seed`
 2. Training starten:
    - `cd backend && python -m app.ml.retrain`

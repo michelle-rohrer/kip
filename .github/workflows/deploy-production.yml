@@ -7,28 +7,29 @@ on:
 
 jobs:
   deploy:
-    name: Trigger production deploy hooks
+    name: Trigger production deploy
     runs-on: ubuntu-latest
     steps:
+      # Render deployt beide Services standardmaessig selbst (autoDeploy in render.yaml).
+      # Die Hooks sind nur noetig, wenn autoDeploy im Dashboard abgeschaltet wurde.
       - name: Trigger backend production deploy
-        if: ${{ secrets.PRODUCTION_BACKEND_DEPLOY_HOOK_URL != '' }}
         env:
           HOOK_URL: ${{ secrets.PRODUCTION_BACKEND_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$HOOK_URL"
+        run: |
+          if [ -n "$HOOK_URL" ]; then
+            curl -fsS -X POST "$HOOK_URL"
+            echo "Backend deploy hook ausgeloest."
+          else
+            echo "Kein Backend-Hook gesetzt - Render deployt automatisch (autoDeploy)."
+          fi
 
       - name: Trigger frontend production deploy
-        if: ${{ secrets.PRODUCTION_FRONTEND_DEPLOY_HOOK_URL != '' }}
         env:
           HOOK_URL: ${{ secrets.PRODUCTION_FRONTEND_DEPLOY_HOOK_URL }}
-        run: curl -fsS -X POST "$HOOK_URL"
-
-      - name: Verify deployment hooks configured
-        env:
-          BACKEND_HOOK: ${{ secrets.PRODUCTION_BACKEND_DEPLOY_HOOK_URL }}
-          FRONTEND_HOOK: ${{ secrets.PRODUCTION_FRONTEND_DEPLOY_HOOK_URL }}
         run: |
-          if [ -z "$BACKEND_HOOK" ] || [ -z "$FRONTEND_HOOK" ]; then
-            echo "Missing production deploy hook secrets."
-            echo "Set PRODUCTION_BACKEND_DEPLOY_HOOK_URL and PRODUCTION_FRONTEND_DEPLOY_HOOK_URL in GitHub repository secrets."
-            exit 1
+          if [ -n "$HOOK_URL" ]; then
+            curl -fsS -X POST "$HOOK_URL"
+            echo "Frontend deploy hook ausgeloest."
+          else
+            echo "Kein Frontend-Hook gesetzt - Render deployt automatisch (autoDeploy)."
           fi

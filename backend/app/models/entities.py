@@ -37,6 +37,14 @@ class RiskLevel(str, enum.Enum):
     RED = "red"
 
 
+class WearableProvider(str, enum.Enum):
+    """Sources a player can link so sleep/recovery data arrives on its own."""
+
+    WHOOP = "whoop"
+    OURA = "oura"
+    APPLE_HEALTH = "apple_health"
+
+
 def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
     return [item.value for item in enum_cls]
 
@@ -88,6 +96,12 @@ class User(Base):
         back_populates="player", cascade="all, delete-orphan"
     )
     risk_predictions: Mapped[list["RiskPrediction"]] = relationship(
+        back_populates="player", cascade="all, delete-orphan"
+    )
+    wearable_connections: Mapped[list["WearableConnection"]] = relationship(
+        back_populates="player", cascade="all, delete-orphan"
+    )
+    wearable_days: Mapped[list["WearableDaily"]] = relationship(
         back_populates="player", cascade="all, delete-orphan"
     )
     given_privacy_consents: Mapped[list["PrivacyConsent"]] = relationship(
@@ -156,6 +170,11 @@ class TrainingEntry(Base):
     intensity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_rpe: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Jump count and participation status are what the app has always asked for
+    # in the training form; they were dropped from the schema by accident and
+    # every value a player typed in was silently discarded.
+    jump_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    participation_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     strength_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     player: Mapped[User] = relationship(back_populates="training_entries")
@@ -171,7 +190,10 @@ class InjuryEntry(Base):
     pain_intensity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_chronic: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     medical_attention: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    time_loss_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Nullable since migration 20260428_000004 - the model still claimed NOT
+    # NULL, so tests (create_all) and production (migrated) disagreed on
+    # whether an injury without a known absence could be saved at all.
+    time_loss_days: Mapped[int | None] = mapped_column(Integer, default=0, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     player: Mapped[User] = relationship(back_populates="injury_entries")
@@ -221,3 +243,106 @@ class RiskPrediction(Base):
     features_used: Mapped[dict] = mapped_column(JSON, nullable=False)
 
     player: Mapped[User] = relationship(back_populates="risk_predictions")
+
+
+class RefreshSession(Base):
+    """Server-side state for one refresh token.
+
+    Keeping this in the database (instead of process memory) means a deploy or
+    restart no longer signs everybody out, and logout stays effective.
+    """
+
+    __tablename__ = "refresh_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    jti: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+
+class WearableConnection(Base):
+    """One player's link to one wearable provider.
+
+    OAuth tokens are stored encrypted (see ``app.services.crypto``) because a
+    leaked Whoop/Oura token would expose far more health data than this app
+    ever collects itself. Apple Health has no cloud API, so instead of tokens
+    we keep the hash of an ingest token that the iOS shortcut sends along.
+    """
+
+    __tablename__ = "wearable_connections"
+    __table_args__ = (
+        UniqueConstraint("player_id", "provider", name="uq_wearable_connections_player_provider"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    provider: Mapped[WearableProvider] = mapped_column(
+        Enum(WearableProvider, name="wearable_provider", values_callable=enum_values),
+        nullable=False,
+    )
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    scope: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    external_user_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ingest_token_hash: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_sync_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    player: Mapped[User] = relationship(back_populates="wearable_connections")
+
+
+class WearableDaily(Base):
+    """One provider's summary for one player on one calendar day.
+
+    Kept separate from ``WellnessEntry`` on purpose: the wellness entry is what
+    the player reports about herself, this is what a device measured. Mixing
+    them would make it impossible to tell later which number came from where.
+    """
+
+    __tablename__ = "wearable_daily"
+    __table_args__ = (
+        UniqueConstraint(
+            "player_id", "date", "provider", name="uq_wearable_daily_player_date_provider"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    provider: Mapped[WearableProvider] = mapped_column(
+        Enum(WearableProvider, name="wearable_provider", values_callable=enum_values),
+        nullable=False,
+    )
+    sleep_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sleep_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    readiness_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hrv_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    resting_hr: Mapped[float | None] = mapped_column(Float, nullable=True)
+    respiratory_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    strain: Mapped[float | None] = mapped_column(Float, nullable=True)
+    steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    active_calories: Mapped[float | None] = mapped_column(Float, nullable=True)
+    workout_minutes: Mapped[float | None] = mapped_column(Float, nullable=True)
+    raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    player: Mapped[User] = relationship(back_populates="wearable_days")

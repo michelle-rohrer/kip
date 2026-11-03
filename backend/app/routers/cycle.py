@@ -38,6 +38,32 @@ def create_cycle_entry(
     return entry
 
 
+@router.put("/", response_model=CycleEntryResponse)
+def upsert_cycle_entry(
+    payload: CycleEntryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.PLAYER)),
+) -> CycleEntry:
+    """Save a cycle day, overwriting an earlier entry for the same date."""
+    entry = (
+        db.query(CycleEntry)
+        .filter(
+            CycleEntry.player_id == current_user.id,
+            CycleEntry.date == payload.date,
+        )
+        .one_or_none()
+    )
+    if entry is None:
+        entry = CycleEntry(player_id=current_user.id, **payload.model_dump())
+        db.add(entry)
+    else:
+        for field, value in payload.model_dump().items():
+            setattr(entry, field, value)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
 @router.get("/", response_model=list[CycleEntryResponse])
 def list_own_cycle_entries(
     db: Session = Depends(get_db),

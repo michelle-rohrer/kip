@@ -1,0 +1,319 @@
+"""Oura integration (Oura API v2).
+
+Two ways in, because they suit different people:
+
+* **Personal access token** - each player creates one at
+  https://cloud.ouraring.com/personal-access-tokens and pastes it into the app.
+  Nothing has to be registered anywhere, so this works today.
+* **OAuth** - nicer for the player (no copy-paste), but needs a registered Oura
+  application. Enabled automatically once ``OURA_CLIENT_ID``/``OURA_CLIENT_SECRET``
+  are set.
+
+Oura already reports a local calendar ``day`` per record, so unlike Whoop there
+is no timezone maths to do here.
+"""
+
+from __future__ import annotations
+
+import os
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
+from urllib.parse import urlencode
+
+import httpx
+
+from app.services.wearables.base import (
+    DailyMetrics,
+    TokenBundle,
+    WearableAuthError,
+    WearableError,
+    as_float,
+    as_int,
+    clamp_score,
+    merge_days,
+)
+
+PROVIDER = "oura"
+DEFAULT_API_BASE = "https://api.ouraring.com"
+DEFAULT_AUTH_BASE = "https://cloud.ouraring.com"
+SCOPES = "personal daily heartrate workout session"
+REQUEST_TIMEOUT = 30.0
+MAX_PAGES = 20
+
+
+def api_base() -> str:
+    return os.getenv("OURA_API_BASE", DEFAULT_API_BASE).rstrip("/")
+
+
+def auth_base() -> str:
+    return os.getenv("OURA_AUTH_BASE", DEFAULT_AUTH_BASE).rstrip("/")
+
+
+def client_id() -> str:
+    return os.getenv("OURA_CLIENT_ID", "").strip()
+
+
+def client_secret() -> str:
+    return os.getenv("OURA_CLIENT_SECRET", "").strip()
+
+
+def is_oauth_configured() -> bool:
+    return bool(client_id() and client_secret())
+
+
+def is_configured() -> bool:
+    # A personal access token always works, so Oura is never fully unavailable.
+    return True
+
+
+def authorize_url(*, state: str, redirect_uri: str) -> str:
+    query = urlencode(
+        {
+            "response_type": "code",
+            "client_id": client_id(),
+            "redirect_uri": redirect_uri,
+            "scope": SCOPES,
+            "state": state,
+        }
+    )
+    return f"{auth_base()}/oauth/authorize?{query}"
+
+
+def _token_request(form: dict[str, str]) -> TokenBundle:
+    url = f"{api_base()}/oauth/token"
+    try:
+        response = httpx.post(url, data=form, timeout=REQUEST_TIMEOUT)
+    except httpx.HTTPError as exc:
+        raise WearableError(f"Oura is not reachable: {exc}") from exc
+
+    if response.status_code >= 400:
+        detail = response.text[:300]
+        if response.status_code in (400, 401):
+            raise WearableAuthError(f"Oura rejected the token request: {detail}")
+        raise WearableError(f"Oura token request failed ({response.status_code}): {detail}")
+
+    payload: dict[str, Any] = response.json()
+    access_token = payload.get("access_token")
+    if not access_token:
+        raise WearableError("Oura returned no access token")
+
+    expires_in = as_int(payload.get("expires_in")) or 86400
+    return TokenBundle(
+        access_token=access_token,
+        refresh_token=payload.get("refresh_token"),
+        expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+        scope=payload.get("scope") or SCOPES,
+    )
+
+
+def exchange_code(*, code: str, redirect_uri: str) -> TokenBundle:
+    return _token_request(
+        {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "client_id": client_id(),
+            "client_secret": client_secret(),
+        }
+    )
+
+
+def refresh_access_token(refresh_token: str) -> TokenBundle:
+    return _token_request(
+        {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id(),
+            "client_secret": client_secret(),
+        }
+    )
+
+
+def verify_token(access_token: str) -> str | None:
+    """Check a pasted personal access token and return the Oura user id."""
+    url = f"{api_base()}/v2/usercollection/personal_info"
+    try:
+        response = httpx.get(
+            url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=REQUEST_TIMEOUT,
+        )
+    except httpx.HTTPError as exc:
+        raise WearableError(f"Oura is not reachable: {exc}") from exc
+
+    if response.status_code in (401, 403):
+        raise WearableAuthError("This Oura token is not valid")
+    if response.status_code >= 400:
+        raise WearableError(f"Oura request failed ({response.status_code})")
+
+    payload = response.json()
+    value = payload.get("id") if isinstance(payload, dict) else None
+    return str(value) if value not in (None, "") else None
+
+
+def _get_documents(
+    *, collection: str, access_token: str, start: date, end: date
+) -> list[dict[str, Any]]:
+    url = f"{api_base()}/v2/usercollection/{collection}"
+    params: dict[str, Any] = {
+        "start_date": start.isoformat(),
+        "end_date": end.isoformat(),
+    }
+    headers = {"Authorization": f"Bearer {access_token}"}
+    documents: list[dict[str, Any]] = []
+
+    for _ in range(MAX_PAGES):
+        try:
+            response = httpx.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+        except httpx.HTTPError as exc:
+            raise WearableError(f"Oura is not reachable: {exc}") from exc
+
+        if response.status_code in (401, 403):
+            raise WearableAuthError("Oura access was revoked - please reconnect")
+        if response.status_code == 429:
+            raise WearableError("Oura rate limit reached - try again later")
+        if response.status_code == 404:
+            # Scope not granted for this collection; the rest still syncs.
+            return []
+        if response.status_code >= 400:
+            raise WearableError(f"Oura request failed ({response.status_code}) for {collection}")
+
+        payload = response.json()
+        page = payload.get("data") if isinstance(payload, dict) else None
+        documents.extend(item for item in (page or []) if isinstance(item, dict))
+
+        next_token = payload.get("next_token") if isinstance(payload, dict) else None
+        if not next_token:
+            break
+        params["next_token"] = next_token
+
+    return documents
+
+
+def _parse_day(value: Any) -> date | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def _daily_sleep_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
+    out: list[DailyMetrics] = []
+    for document in documents:
+        day = _parse_day(document.get("day"))
+        if day is None:
+            continue
+        out.append(
+            DailyMetrics(
+                day=day,
+                sleep_score=clamp_score(document.get("score")),
+                raw={"daily_sleep": document},
+            )
+        )
+    return out
+
+
+def _readiness_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
+    out: list[DailyMetrics] = []
+    for document in documents:
+        day = _parse_day(document.get("day"))
+        if day is None:
+            continue
+        out.append(
+            DailyMetrics(
+                day=day,
+                readiness_score=clamp_score(document.get("score")),
+                raw={"daily_readiness": document},
+            )
+        )
+    return out
+
+
+def _sleep_detail_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
+    """Use the main night per day - naps would distort HRV and sleep length."""
+    best_per_day: dict[date, dict[str, Any]] = {}
+    for document in documents:
+        day = _parse_day(document.get("day"))
+        if day is None:
+            continue
+        if document.get("type") in ("rest", "late_nap"):
+            continue
+        duration = as_float(document.get("total_sleep_duration")) or 0.0
+        current = best_per_day.get(day)
+        if current is None or duration > (as_float(current.get("total_sleep_duration")) or 0.0):
+            best_per_day[day] = document
+
+    out: list[DailyMetrics] = []
+    for day, document in best_per_day.items():
+        seconds = as_float(document.get("total_sleep_duration"))
+        out.append(
+            DailyMetrics(
+                day=day,
+                sleep_hours=round(seconds / 3600, 2) if seconds else None,
+                hrv_ms=as_float(document.get("average_hrv")),
+                resting_hr=as_float(
+                    document.get("lowest_heart_rate") or document.get("average_heart_rate")
+                ),
+                respiratory_rate=as_float(document.get("average_breath")),
+                raw={"sleep": document},
+            )
+        )
+    return out
+
+
+def _activity_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
+    out: list[DailyMetrics] = []
+    for document in documents:
+        day = _parse_day(document.get("day"))
+        if day is None:
+            continue
+        out.append(
+            DailyMetrics(
+                day=day,
+                steps=as_int(document.get("steps")),
+                active_calories=as_float(document.get("active_calories")),
+                raw={"daily_activity": document},
+            )
+        )
+    return out
+
+
+def _workout_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
+    minutes_by_day: dict[date, float] = {}
+    for document in documents:
+        day = _parse_day(document.get("day"))
+        start_text = document.get("start_datetime")
+        end_text = document.get("end_datetime")
+        if day is None or not isinstance(start_text, str) or not isinstance(end_text, str):
+            continue
+        try:
+            started = datetime.fromisoformat(start_text.replace("Z", "+00:00"))
+            ended = datetime.fromisoformat(end_text.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        minutes = (ended - started).total_seconds() / 60.0
+        if minutes > 0:
+            minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+    return [
+        DailyMetrics(day=day, workout_minutes=round(minutes, 1))
+        for day, minutes in minutes_by_day.items()
+    ]
+
+
+def fetch_daily(*, access_token: str, start: date, end: date) -> list[DailyMetrics]:
+    def collect(collection: str) -> list[dict[str, Any]]:
+        return _get_documents(
+            collection=collection, access_token=access_token, start=start, end=end
+        )
+
+    return merge_days(
+        [
+            _sleep_detail_days(collect("sleep")),
+            _daily_sleep_days(collect("daily_sleep")),
+            _readiness_days(collect("daily_readiness")),
+            _activity_days(collect("daily_activity")),
+            _workout_days(collect("workout")),
+        ]
+    )

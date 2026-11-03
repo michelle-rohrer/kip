@@ -1381,3 +1381,66 @@ def test_a_collection_oura_refuses_is_reported_not_swallowed(
         skipped=skipped,
     )
     assert skipped == ["workout"]
+
+
+def test_a_refused_cycle_collection_does_not_kill_the_whole_sync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The exact failure a player hit after switching cycle sync on.
+
+    Oura refused only daily_cycle_phases, and the sync reported "access was
+    revoked - please reconnect" while discarding sleep, readiness and
+    activity that had arrived without trouble. Reconnecting could not have
+    helped, because the token was never the problem.
+    """
+    calls: list[str] = []
+
+    def fake_get(url: str, **kwargs: Any) -> FakeResponse:
+        calls.append(url.rsplit("/", 1)[-1])
+        if url.endswith("/daily_cycle_phases"):
+            return FakeResponse({"detail": "forbidden"}, 403)
+        if url.endswith("/daily_sleep"):
+            return FakeResponse({"data": [{"day": "2026-11-02", "score": 80}]})
+        return FakeResponse({"data": []})
+
+    monkeypatch.setattr(oura.httpx, "get", fake_get)
+    skipped: list[str] = []
+    days = oura.fetch_daily(
+        access_token="token",
+        start=date(2026, 11, 1),
+        end=date(2026, 11, 3),
+        with_cycle=True,
+        skipped=skipped,
+    )
+    assert "daily_cycle_phases" in calls
+    assert skipped == ["daily_cycle_phases"]
+    # ...and the data that did arrive is kept.
+    assert [d.day for d in days] == [date(2026, 11, 2)]
+    assert days[0].sleep_score == 80
+
+
+def test_a_dead_token_still_asks_for_a_reconnect(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 401 on a collection every account has is the real thing."""
+    monkeypatch.setattr(
+        oura.httpx, "get", lambda url, **kwargs: FakeResponse({"detail": "unauthorized"}, 401)
+    )
+    with pytest.raises(WearableAuthError):
+        oura.fetch_daily(access_token="dead", start=date(2026, 11, 1), end=date(2026, 11, 3))
+
+
+def test_whoop_distinguishes_a_missing_scope_from_a_dead_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        whoop.httpx, "get", lambda url, **kwargs: FakeResponse({"detail": "forbidden"}, 403)
+    )
+    with pytest.raises(WearableError) as caught:
+        whoop.fetch_daily(access_token="token", start=date(2026, 11, 1), end=date(2026, 11, 3))
+    assert not isinstance(caught.value, WearableAuthError)
+    assert "scopes" in str(caught.value)
+
+    monkeypatch.setattr(
+        whoop.httpx, "get", lambda url, **kwargs: FakeResponse({"detail": "nope"}, 401)
+    )
+    with pytest.raises(WearableAuthError):
+        whoop.fetch_daily(access_token="dead", start=date(2026, 11, 1), end=date(2026, 11, 3))

@@ -17,6 +17,34 @@ Zeitaufwand beim ersten Mal: ca. 30–45 Minuten.
 
 ---
 
+## Stand heute (Stand 3. November 2026)
+
+| Teil | Status |
+| --- | --- |
+| Frontend | **laeuft** auf [volleysync.vercel.app](https://volleysync.vercel.app), deployt selbst aus `main` |
+| Backend | **fehlt** – `volleysync-api.onrender.com` antwortet mit 404 |
+| Datenbank | **fehlt** |
+
+Das Frontend ist also schon oeffentlich, zeigt aber auf ein Backend
+(`https://volleysync.onrender.com`), das nicht antwortet. Zu tun bleiben die
+Datenbank und der Backend-Service – danach laeuft die App.
+
+> `volleysync.onrender.com` laeuft beim Aufruf in einen Timeout statt in ein 404.
+> Das deutet auf einen **bestehenden, pausierten Render-Service** unter genau
+> diesem Namen hin. Schau zuerst im Render-Dashboard nach: gibt es den Service
+> schon, reaktivierst du ihn (Schritt 2 entfaellt dann) und setzt nur die
+> Umgebungsvariablen. Gibt es ihn nicht, legst du ihn neu an.
+
+**Wenn Vercel das Frontend bleibt**, musst du in Schritt 2 nur `volleysync-api`
+anlegen – die Static Site aus `render.yaml` ist dann ueberfluessig. Zwei Dinge
+muessen dann zusammenpassen:
+
+- in Vercel: `VITE_API_BASE_URL` = die URL des Render-Backends (danach **Redeploy**,
+  der Wert wird in den Build eingebacken)
+- auf Render: `CORS_ALLOW_ORIGINS` = `https://volleysync.vercel.app`
+
+---
+
 ## 0) Vorbereitung
 
 - [ ] Code ist auf `main` gepusht (`git status` sauber)
@@ -62,13 +90,13 @@ Im Repo liegt `render.yaml`. Render liest die Datei und erstellt beide Services 
 | --- | --- |
 | `DATABASE_URL` | Connection String aus Neon (Schritt 1) |
 | `JWT_SECRET_KEY` | Der `openssl rand -hex 32`-Wert |
-| `CORS_ALLOW_ORIGINS` | vorlaeufig `https://volleysync-app.onrender.com` |
+| `CORS_ALLOW_ORIGINS` | `https://volleysync.vercel.app` (bzw. die Render-Frontend-URL) |
 | `TRUSTED_HOSTS` | vorlaeufig `volleysync-api.onrender.com` |
 | `BOOTSTRAP_COACH_USERNAME` | dein Login, z. B. `michelle` |
 | `BOOTSTRAP_COACH_PASSWORD` | dein Coach-Passwort (mind. 8 Zeichen) |
 | `BOOTSTRAP_COACH_NAME` | z. B. `Michelle Rohrer` |
 | `API_BASE_URL` | vorlaeufig `https://volleysync-api.onrender.com` |
-| `FRONTEND_BASE_URL` | vorlaeufig `https://volleysync-app.onrender.com` |
+| `FRONTEND_BASE_URL` | `https://volleysync.vercel.app` (bzw. die Render-Frontend-URL) |
 
 > **Wichtig bei den Teams:** Eine Trainerin sieht nur Spielerinnen **ihres eigenen Teams**.
 > `BOOTSTRAP_TEAMS` steht standardmaessig auf zwei Teams und dein Coach-Konto landet im
@@ -107,8 +135,11 @@ Service-Seite und sehen meist so aus wie oben angenommen. Falls sie abweichen (z
    - `TRUSTED_HOSTS` = Hostname der API **ohne** `https://`
    - `API_BASE_URL` = exakte API-URL **ohne Slash am Ende**
    - `FRONTEND_BASE_URL` = exakte Frontend-URL **ohne Slash am Ende**
-2. `volleysync-app` -> **Environment**:
-   - `VITE_API_BASE_URL` = exakte API-URL **ohne Slash am Ende**
+2. Frontend -> **Environment**:
+   - auf Vercel: Project `volleysync` -> Settings -> Environment Variables ->
+     `VITE_API_BASE_URL` = exakte API-URL **ohne Slash am Ende** -> danach
+     **Redeploy**
+   - auf Render (falls Static Site): `volleysync-app` -> `VITE_API_BASE_URL`
 3. Beide Services **Manual Deploy -> Deploy latest commit**
 
 > `VITE_API_BASE_URL` wird beim Build in die Dateien eingebacken. Nach einer Aenderung muss das

@@ -2,10 +2,22 @@
 #
 # Legt zwei Services an:
 #   1. volleysync-api      -> FastAPI-Backend (Docker, Plan "starter" = immer wach)
-#   2. volleysync-app      -> React-Frontend als Static Site (gratis)
+#   2. volleysync-app      -> React-Frontend als Static Site (gratis, OPTIONAL)
 #
 # Die Datenbank kommt von Neon (https://neon.tech, dauerhaft gratis).
 # Schritt-fuer-Schritt-Anleitung: docs/Deployment_Anleitung.md
+#
+# ACHTUNG - Frontend laeuft bereits auf Vercel:
+#   https://volleysync.vercel.app ist live und deployt selbst aus diesem Repo
+#   (Root-Verzeichnis "frontend"). Der Static-Site-Service unten ist deshalb
+#   nur eine Alternative - entweder Vercel ODER Render, nicht beides.
+#
+#   Das Vercel-Frontend ruft aktuell https://volleysync.onrender.com auf. Diese
+#   URL ergibt sich aus dem Service-NAMEN auf Render. Wenn das Backend hier als
+#   "volleysync-api" angelegt wird, heisst es volleysync-api.onrender.com und
+#   passt nicht mehr - dann in Vercel VITE_API_BASE_URL anpassen und das
+#   Frontend neu bauen. Wer sich das sparen will, nennt den Service unten
+#   einfach "volleysync".
 #
 # Werte mit "sync: false" fragt Render beim ersten Deploy im Dashboard ab bzw.
 # muessen dort einmalig gesetzt werden.
@@ -91,6 +103,8 @@ services:
       - key: ML_ALLOW_SYNTHETIC_BOOTSTRAP
         value: "true"
 
+  # OPTIONAL - nur anlegen, wenn das Frontend NICHT auf Vercel laufen soll.
+  # Laeuft es auf beiden, muessen beide Domains in CORS_ALLOW_ORIGINS stehen.
   - type: web
     name: volleysync-app
     runtime: static

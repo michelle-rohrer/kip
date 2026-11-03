@@ -33,10 +33,11 @@ from app.schemas.integrations import (
     IngestTokenResponse,
     IntegrationStatus,
     OuraPersonalTokenRequest,
+    SuggestionResponse,
+    SyncCycleRequest,
     SyncRequest,
     SyncResponse,
     WearableDailyResponse,
-    WellnessSuggestionResponse,
 )
 from app.services.privacy import assert_coach_can_view_wellness
 from app.services.rate_limit import check_auth_rate_limit
@@ -300,21 +301,44 @@ def sync_all_connections(
     return wearables.sync_all(db)
 
 
-@router.get("/suggestion", response_model=WellnessSuggestionResponse)
-def wellness_suggestion(
+@router.get("/suggestion", response_model=SuggestionResponse)
+def suggestions(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.PLAYER)),
     day: date | None = Query(default=None, alias="date"),
 ) -> dict[str, Any]:
-    """Values the wellness form can prefill from last night's device data."""
+    """What the wellness, training and cycle forms can prefill for one day.
+
+    Suggestions only - nothing here is stored until the player presses save.
+    """
     target_day = day or date.today()
-    suggestion = wearables.wellness_suggestion(db, player_id=current_user.id, day=target_day)
+    suggestion = wearables.suggestions(db, player_id=current_user.id, day=target_day)
     if suggestion is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No device data for this date",
+            detail="Nothing to suggest for this date",
         )
     return suggestion
+
+
+@router.put("/{provider}/cycle-sync", response_model=IntegrationStatus)
+def set_cycle_sync(
+    provider: str,
+    payload: SyncCycleRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.PLAYER)),
+) -> dict[str, Any]:
+    """Allow or stop taking cycle data from one provider.
+
+    Switching it off also deletes what that provider already delivered - the
+    switch has to actually remove the data, not just hide it.
+    """
+    target = wearables.parse_provider(provider)
+    wearables.set_sync_cycle(
+        db, player_id=current_user.id, provider=target, enabled=payload.enabled
+    )
+    rows = wearables.connection_status(db, current_user)
+    return next(row for row in rows if row["provider"] == target.value)
 
 
 @router.get("/daily", response_model=list[WearableDailyResponse])

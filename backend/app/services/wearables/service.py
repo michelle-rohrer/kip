@@ -23,7 +23,9 @@ from app.services.wearables.base import (
     TokenBundle,
     WearableAuthError,
     WearableError,
+    session_type_for,
 )
+from app.services.wearables.cycle import estimate as cycle_estimate
 
 logger = logging.getLogger(__name__)
 
@@ -272,10 +274,18 @@ def store_days(
     player_id: int,
     provider: WearableProvider,
     days: list[DailyMetrics],
+    allow_cycle: bool = False,
 ) -> int:
-    """Upsert one row per day, never erasing a value with a later ``None``."""
+    """Upsert one row per day, never erasing a value with a later ``None``.
+
+    Cycle data is dropped on the floor unless the player switched it on for
+    this provider. Filtering here rather than at the parsers means no payload
+    shape can sneak it past the opt-in.
+    """
     written = 0
     for item in days:
+        if not allow_cycle:
+            item.menstrual_flow = None
         if not item.has_values():
             continue
         row = db.execute(
@@ -341,7 +351,12 @@ def sync_connection(
         if connection.provider is WearableProvider.WHOOP:
             fetched = whoop.fetch_daily(access_token=access_token, start=start, end=end)
         else:
-            fetched = oura.fetch_daily(access_token=access_token, start=start, end=end)
+            fetched = oura.fetch_daily(
+                access_token=access_token,
+                start=start,
+                end=end,
+                with_cycle=connection.sync_cycle,
+            )
     except WearableError as exc:
         connection.last_sync_status = "failed"
         connection.last_error = str(exc)[:500]
@@ -350,7 +365,11 @@ def sync_connection(
         raise
 
     written = store_days(
-        db, player_id=connection.player_id, provider=connection.provider, days=fetched
+        db,
+        player_id=connection.player_id,
+        provider=connection.provider,
+        days=fetched,
+        allow_cycle=connection.sync_cycle,
     )
     now = _now()
     connection.last_sync_at = now
@@ -376,6 +395,7 @@ def ingest_apple_health(db: Session, connection: WearableConnection, payload: An
         player_id=connection.player_id,
         provider=WearableProvider.APPLE_HEALTH,
         days=days,
+        allow_cycle=connection.sync_cycle,
     )
     now = _now()
     connection.last_sync_at = now
@@ -444,11 +464,100 @@ def list_daily(
     return list(db.execute(query).scalars().all())
 
 
-def wellness_suggestion(db: Session, *, player_id: int, day: date) -> dict[str, Any] | None:
-    """What the wellness form can prefill for ``day`` from device data.
+# Whoop reports strain on a 0-21 scale; the app asks for intensity on 1-10.
+WHOOP_MAX_STRAIN = 21.0
+
+
+def intensity_from_strain(strain: float | None) -> int | None:
+    if strain is None:
+        return None
+    return max(1, min(10, round(strain / WHOOP_MAX_STRAIN * 10)))
+
+
+def _wellness_from(rows: list[WearableDaily]) -> dict[str, Any] | None:
+    """Sleep and recovery numbers for the wellness form.
 
     Sleep quality is a 1-10 scale in this app while providers report 0-100,
     so a sleep score becomes a rounded tenth of itself.
+    """
+    out: dict[str, Any] = {}
+    for row in rows:
+        if out.get("sleep_hours") is None and row.sleep_hours is not None:
+            out["sleep_hours"] = round(row.sleep_hours, 1)
+        if out.get("sleep_quality") is None and row.sleep_score is not None:
+            out["sleep_quality"] = max(1, min(10, round(row.sleep_score / 10)))
+        if out.get("readiness_score") is None and row.readiness_score is not None:
+            out["readiness_score"] = row.readiness_score
+        if out.get("hrv_ms") is None and row.hrv_ms is not None:
+            out["hrv_ms"] = round(row.hrv_ms, 1)
+        if out.get("resting_hr") is None and row.resting_hr is not None:
+            out["resting_hr"] = round(row.resting_hr, 1)
+        if out.get("strain") is None and row.strain is not None:
+            out["strain"] = round(row.strain, 1)
+    return out or None
+
+
+def _training_from(rows: list[WearableDaily]) -> dict[str, Any] | None:
+    """A training entry the player can confirm, never one that is saved for her.
+
+    Intensity only comes along when the device measured strain. Session type
+    only when the sport is one we recognise - a bike ride must not arrive
+    pre-labelled as a volleyball session.
+    """
+    minutes = next((r.workout_minutes for r in rows if r.workout_minutes), None)
+    if not minutes or minutes < 10:
+        return None
+
+    sport = next((r.workout_sport for r in rows if r.workout_sport), None)
+    strain = next((r.strain for r in rows if r.strain is not None), None)
+    return {
+        "duration_min": int(round(minutes)),
+        "intensity": intensity_from_strain(strain),
+        "session_type": session_type_for(sport),
+        "sport": sport,
+    }
+
+
+def _cycle_from(
+    db: Session, *, player_id: int, day: date, rows: list[WearableDaily]
+) -> dict[str, Any] | None:
+    """Cycle day and phase, derived from the period days a device reported."""
+    # Deliberately not limited to days with flow: the useful answer is mostly
+    # about the days *between* periods.
+    history = (
+        db.execute(
+            select(WearableDaily.date, WearableDaily.menstrual_flow)
+            .where(
+                WearableDaily.player_id == player_id,
+                WearableDaily.menstrual_flow.is_not(None),
+                WearableDaily.date <= day,
+                WearableDaily.date >= day - timedelta(days=400),
+            )
+            .order_by(WearableDaily.date.asc())
+        )
+        .tuples()
+        .all()
+    )
+    if not history:
+        return None
+
+    flow_by_day = {row_date: flow for row_date, flow in history if flow}
+    estimate = cycle_estimate(flow_by_day, on=day)
+    if estimate is None:
+        return None
+    return {
+        "cycle_day": estimate.cycle_day,
+        "phase": estimate.phase,
+        "cycle_length": estimate.cycle_length,
+        "flow": estimate.flow,
+    }
+
+
+def suggestions(db: Session, *, player_id: int, day: date) -> dict[str, Any] | None:
+    """Everything the forms can prefill for ``day`` from device data.
+
+    One call so the app does not have to ask three times for the same day.
+    Each section is absent when the devices had nothing to say about it.
     """
     rows = (
         db.execute(
@@ -459,26 +568,55 @@ def wellness_suggestion(db: Session, *, player_id: int, day: date) -> dict[str, 
         .scalars()
         .all()
     )
-    if not rows:
+
+    wellness = _wellness_from(rows)
+    training = _training_from(rows)
+    cycle = _cycle_from(db, player_id=player_id, day=day, rows=rows)
+    if not (wellness or training or cycle):
         return None
 
-    suggestion: dict[str, Any] = {"date": day, "sources": []}
-    for row in rows:
-        suggestion["sources"].append(row.provider.value)
-        if suggestion.get("sleep_hours") is None and row.sleep_hours is not None:
-            suggestion["sleep_hours"] = round(row.sleep_hours, 1)
-        if suggestion.get("sleep_quality") is None and row.sleep_score is not None:
-            suggestion["sleep_quality"] = max(1, min(10, round(row.sleep_score / 10)))
-        if suggestion.get("readiness_score") is None and row.readiness_score is not None:
-            suggestion["readiness_score"] = row.readiness_score
-        if suggestion.get("hrv_ms") is None and row.hrv_ms is not None:
-            suggestion["hrv_ms"] = round(row.hrv_ms, 1)
-        if suggestion.get("resting_hr") is None and row.resting_hr is not None:
-            suggestion["resting_hr"] = round(row.resting_hr, 1)
-        if suggestion.get("strain") is None and row.strain is not None:
-            suggestion["strain"] = round(row.strain, 1)
+    return {
+        "date": day,
+        "sources": [row.provider.value for row in rows],
+        "wellness": wellness,
+        "training": training,
+        "cycle": cycle,
+    }
 
-    return suggestion
+
+def set_sync_cycle(
+    db: Session, *, player_id: int, provider: WearableProvider, enabled: bool
+) -> WearableConnection:
+    """Turn cycle sync on or off for one provider.
+
+    Switching it off also removes the cycle data already taken from that
+    provider - "stop using this" has to mean the data goes too, otherwise the
+    switch is only cosmetic.
+    """
+    connection = get_connection(db, player_id=player_id, provider=provider)
+    if connection is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{provider.value} is not connected",
+        )
+    connection.sync_cycle = enabled
+    connection.updated_at = _now()
+    if not enabled:
+        for row in (
+            db.execute(
+                select(WearableDaily).where(
+                    WearableDaily.player_id == player_id,
+                    WearableDaily.provider == provider,
+                    WearableDaily.menstrual_flow.is_not(None),
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            row.menstrual_flow = None
+    db.commit()
+    db.refresh(connection)
+    return connection
 
 
 def connection_status(db: Session, player: User) -> list[dict[str, Any]]:
@@ -501,6 +639,7 @@ def connection_status(db: Session, player: User) -> list[dict[str, Any]]:
                 "connected": is_connected(connection),
                 "configured": is_configured(provider),
                 "supports_oauth": supports_oauth(provider),
+                "sync_cycle": bool(connection.sync_cycle) if connection else False,
                 "last_sync_at": _aware(connection.last_sync_at) if connection else None,
                 "last_sync_status": connection.last_sync_status if connection else None,
                 "last_error": connection.last_error if connection else None,

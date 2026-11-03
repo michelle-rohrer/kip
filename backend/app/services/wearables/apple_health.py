@@ -24,6 +24,7 @@ from app.services.wearables.base import (
     as_int,
     clamp_score,
     merge_days,
+    normalise_flow,
 )
 
 PROVIDER = "apple_health"
@@ -38,6 +39,10 @@ _METRIC_FIELDS: dict[str, str] = {
     "apple_exercise_time": "workout_minutes",
     "sleep_analysis": "sleep_hours",
 }
+
+# Period tracking in the iPhone Health app. Only read when the player switched
+# cycle sync on for Apple Health - see ``service.store_days``.
+_FLOW_METRICS = {"menstrual_flow", "menstruation", "sexual_activity_menstrual_flow"}
 
 # Keys accepted in the simple shortcut payload, mapped to the same fields.
 _SIMPLE_FIELDS: dict[str, str] = {
@@ -58,6 +63,11 @@ _SIMPLE_FIELDS: dict[str, str] = {
     "active_energy": "active_calories",
     "workout_minutes": "workout_minutes",
     "exercise_minutes": "workout_minutes",
+    "workout_sport": "workout_sport",
+    "sport": "workout_sport",
+    "menstrual_flow": "menstrual_flow",
+    "menstruation": "menstrual_flow",
+    "period": "menstrual_flow",
 }
 
 _INT_FIELDS = {"steps", "sleep_score", "readiness_score"}
@@ -79,8 +89,12 @@ def _parse_day(value: Any) -> date | None:
 
 
 def _assign(target: DailyMetrics, field: str, value: Any) -> None:
-    if field in _SCORE_FIELDS:
-        parsed: Any = clamp_score(value)
+    if field == "menstrual_flow":
+        parsed: Any = normalise_flow(value)
+    elif field == "workout_sport":
+        parsed = str(value).strip()[:64] or None if value is not None else None
+    elif field in _SCORE_FIELDS:
+        parsed = clamp_score(value)
     elif field in _INT_FIELDS:
         parsed = as_int(value)
     else:
@@ -105,6 +119,26 @@ def _parse_metrics(metrics: list[Any]) -> list[DailyMetrics]:
         if not isinstance(metric, dict):
             continue
         name = str(metric.get("name", "")).strip().lower()
+
+        if name in _FLOW_METRICS:
+            for sample in metric.get("data") or []:
+                if not isinstance(sample, dict):
+                    continue
+                day = _parse_day(sample.get("date"))
+                if day is None:
+                    continue
+                flow = normalise_flow(
+                    sample.get("flow")
+                    if sample.get("flow") is not None
+                    else sample.get("value", sample.get("qty"))
+                )
+                if flow is not None:
+                    entry = by_day.setdefault(
+                        day, DailyMetrics(day=day, raw={"source": "apple_health"})
+                    )
+                    entry.menstrual_flow = flow
+            continue
+
         field = _METRIC_FIELDS.get(name)
         if field is None:
             continue
@@ -167,7 +201,14 @@ def _workout_minutes(workout: dict[str, Any]) -> float | None:
 
 
 def _parse_workouts(workouts: list[Any]) -> list[DailyMetrics]:
+    """Sum the day's workout minutes and remember the longest session's sport.
+
+    The longest session is the one worth pre-filling a training entry with -
+    a ten-minute walk should not relabel an evening of volleyball.
+    """
     minutes_by_day: dict[date, float] = {}
+    longest: dict[date, tuple[float, str]] = {}
+
     for workout in workouts:
         if not isinstance(workout, dict):
             continue
@@ -175,10 +216,21 @@ def _parse_workouts(workouts: list[Any]) -> list[DailyMetrics]:
         if day is None:
             continue
         minutes = _workout_minutes(workout)
-        if minutes is not None:
-            minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+        if minutes is None:
+            continue
+        minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+
+        sport = workout.get("name") or workout.get("workoutActivityType") or workout.get("type")
+        if isinstance(sport, str) and sport.strip():
+            if day not in longest or minutes > longest[day][0]:
+                longest[day] = (minutes, sport.strip()[:64])
+
     return [
-        DailyMetrics(day=day, workout_minutes=round(minutes, 1))
+        DailyMetrics(
+            day=day,
+            workout_minutes=round(minutes, 1),
+            workout_sport=longest.get(day, (0.0, None))[1],
+        )
         for day, minutes in minutes_by_day.items()
     ]
 

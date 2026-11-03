@@ -934,9 +934,9 @@ def test_wellness_suggestion_from_device_data(
     )
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["sleep_hours"] == pytest.approx(6.4)
+    assert body["wellness"]["sleep_hours"] == pytest.approx(6.4)
     # 73/100 becomes 7 on the app's 1-10 scale.
-    assert body["sleep_quality"] == 7
+    assert body["wellness"]["sleep_quality"] == 7
     assert body["sources"] == ["apple_health"]
 
 
@@ -1092,3 +1092,194 @@ def test_test_accounts_are_excluded_from_training_data(
     db_session.get(User, player["id"]).is_test_account = True
     db_session.commit()
     assert _build_dataset(db_session).empty
+
+
+# --------------------------------------------- training and cycle suggestions
+
+
+def _push(api_client: TestClient, player: dict[str, Any], payload: Any) -> Any:
+    token = api_client.post(
+        "/api/integrations/apple-health/token", headers=player["headers"]
+    ).json()["ingest_token"]
+    return api_client.post(
+        "/api/integrations/apple-health/ingest",
+        headers={"X-Ingest-Token": token},
+        json=payload,
+    )
+
+
+def test_a_workout_becomes_a_training_suggestion(
+    api_client: TestClient, player: dict[str, Any]
+) -> None:
+    today = date.today()
+    assert (
+        _push(
+            api_client,
+            player,
+            {
+                "data": {
+                    "workouts": [
+                        {
+                            "name": "Volleyball",
+                            "start": f"{today} 19:00:00 +0100",
+                            "end": f"{today} 20:30:00 +0100",
+                        }
+                    ]
+                }
+            },
+        ).status_code
+        == 200
+    )
+
+    res = api_client.get(
+        "/api/integrations/suggestion",
+        headers=player["headers"],
+        params={"date": today.isoformat()},
+    )
+    assert res.status_code == 200, res.text
+    training = res.json()["training"]
+    assert training["duration_min"] == 90
+    assert training["sport"] == "Volleyball"
+    assert training["session_type"] == "team"
+    # Nothing measured the effort, so the app must not invent an intensity.
+    assert training["intensity"] is None
+
+
+def test_an_unknown_sport_does_not_pretend_to_be_a_volleyball_session(
+    api_client: TestClient, player: dict[str, Any]
+) -> None:
+    today = date.today()
+    _push(
+        api_client,
+        player,
+        {"date": today.isoformat(), "workout_minutes": 75, "workout_sport": "Cycling"},
+    )
+    training = api_client.get(
+        "/api/integrations/suggestion",
+        headers=player["headers"],
+        params={"date": today.isoformat()},
+    ).json()["training"]
+    assert training["sport"] == "Cycling"
+    assert training["session_type"] is None
+
+
+def test_a_short_walk_is_not_a_training_suggestion(
+    api_client: TestClient, player: dict[str, Any]
+) -> None:
+    today = date.today()
+    _push(api_client, player, {"date": today.isoformat(), "workout_minutes": 6, "steps": 900})
+    res = api_client.get(
+        "/api/integrations/suggestion",
+        headers=player["headers"],
+        params={"date": today.isoformat()},
+    )
+    # Steps and six minutes are not worth a single prefilled field, so the
+    # whole suggestion is absent rather than an empty shell.
+    assert res.status_code == 404
+
+
+def test_cycle_data_is_ignored_until_the_player_allows_it(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    today = date.today()
+    _push(api_client, player, {"date": today.isoformat(), "menstrual_flow": "medium"})
+
+    row = (
+        db_session.query(WearableDaily)
+        .filter(WearableDaily.player_id == player["id"], WearableDaily.date == today)
+        .one_or_none()
+    )
+    assert row is None or row.menstrual_flow is None
+
+    status_rows = api_client.get("/api/integrations/", headers=player["headers"]).json()
+    assert next(r for r in status_rows if r["provider"] == "apple_health")["sync_cycle"] is False
+
+
+def test_cycle_suggestion_once_the_player_allows_it(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    today = date.today()
+    api_client.post("/api/integrations/apple-health/token", headers=player["headers"])
+    enabled = api_client.put(
+        "/api/integrations/apple-health/cycle-sync",
+        headers=player["headers"],
+        json={"enabled": True},
+    )
+    assert enabled.status_code == 200, enabled.text
+    assert enabled.json()["sync_cycle"] is True
+
+    start = today - timedelta(days=11)
+    _push(
+        api_client,
+        player,
+        [
+            {"date": (start + timedelta(days=i)).isoformat(), "menstrual_flow": "medium"}
+            for i in range(4)
+        ],
+    )
+
+    res = api_client.get(
+        "/api/integrations/suggestion",
+        headers=player["headers"],
+        params={"date": today.isoformat()},
+    )
+    assert res.status_code == 200, res.text
+    cycle = res.json()["cycle"]
+    assert cycle["cycle_day"] == 12
+    assert cycle["phase"] == "follicular"
+    assert cycle["cycle_length"] == 28
+
+
+def test_switching_cycle_sync_off_deletes_what_was_taken(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    today = date.today()
+    api_client.post("/api/integrations/apple-health/token", headers=player["headers"])
+    assert (
+        api_client.put(
+            "/api/integrations/apple-health/cycle-sync",
+            headers=player["headers"],
+            json={"enabled": True},
+        ).status_code
+        == 200
+    )
+    _push(api_client, player, {"date": today.isoformat(), "menstrual_flow": "heavy"})
+    assert (
+        db_session.query(WearableDaily).filter(WearableDaily.menstrual_flow.is_not(None)).count()
+        == 1
+    )
+
+    off = api_client.put(
+        "/api/integrations/apple-health/cycle-sync",
+        headers=player["headers"],
+        json={"enabled": False},
+    )
+    assert off.status_code == 200
+    assert off.json()["sync_cycle"] is False
+    db_session.expire_all()
+    assert (
+        db_session.query(WearableDaily).filter(WearableDaily.menstrual_flow.is_not(None)).count()
+        == 0
+    )
+
+
+def test_cycle_sync_needs_a_connected_provider(
+    api_client: TestClient, player: dict[str, Any]
+) -> None:
+    res = api_client.put(
+        "/api/integrations/oura/cycle-sync",
+        headers=player["headers"],
+        json={"enabled": True},
+    )
+    assert res.status_code == 404
+
+
+def test_strain_becomes_an_intensity(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    from app.services.wearables.service import intensity_from_strain
+
+    assert intensity_from_strain(None) is None
+    assert intensity_from_strain(0.0) == 1
+    assert intensity_from_strain(10.5) == 5
+    assert intensity_from_strain(21.0) == 10

@@ -27,6 +27,8 @@ class DailyMetrics:
     steps: int | None = None
     active_calories: float | None = None
     workout_minutes: float | None = None
+    workout_sport: str | None = None
+    menstrual_flow: str | None = None
     raw: dict[str, Any] = field(default_factory=dict)
 
     METRIC_FIELDS = (
@@ -40,6 +42,8 @@ class DailyMetrics:
         "steps",
         "active_calories",
         "workout_minutes",
+        "workout_sport",
+        "menstrual_flow",
     )
 
     def has_values(self) -> bool:
@@ -96,6 +100,78 @@ def clamp_score(value: Any) -> int | None:
     if result is None:
         return None
     return max(0, min(100, result))
+
+
+FLOW_LEVELS = ("none", "light", "medium", "heavy")
+
+# What the different exports call a period day. Numbers come from Apple Health
+# (1 = unspecified, 2 = light, 3 = medium, 4 = heavy), words from everything else.
+_FLOW_ALIASES: dict[str, str] = {
+    "1": "light",
+    "2": "light",
+    "3": "medium",
+    "4": "heavy",
+    "5": "heavy",
+    "0": "none",
+    "none": "none",
+    "nonflow": "none",
+    "no": "none",
+    "false": "none",
+    "unspecified": "light",
+    "light": "light",
+    "leicht": "light",
+    "medium": "medium",
+    "moderate": "medium",
+    "mittel": "medium",
+    "heavy": "heavy",
+    "stark": "heavy",
+    "true": "medium",
+    "yes": "medium",
+}
+
+
+def normalise_flow(value: Any) -> str | None:
+    """Map whatever a device calls a period day onto none/light/medium/heavy."""
+    if value is None or isinstance(value, bool) and value is False:
+        return None
+    if value is True:
+        return "medium"
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if text in _FLOW_ALIASES:
+        return _FLOW_ALIASES[text]
+    # "2.0" and the like
+    try:
+        return _FLOW_ALIASES[str(int(float(text)))]
+    except (ValueError, KeyError):
+        return None
+
+
+# Device sport labels that mean "this was the volleyball session", so the app
+# can pre-fill the session type instead of guessing.
+_TEAM_SPORTS = {"volleyball", "beach_volleyball", "beach volleyball", "handball", "basketball"}
+_STRENGTH_SPORTS = {"weightlifting", "strength", "functional_strength_training", "krafttraining"}
+_RECOVERY_SPORTS = {"yoga", "stretching", "pilates", "mobility", "walking", "meditation"}
+
+
+def session_type_for(sport: str | None) -> str | None:
+    """Our session type for a device sport label, or None when unsure.
+
+    Returning None on purpose when the sport is unknown: a bike ride is not a
+    volleyball session, and quietly calling it "team" would feed the model a
+    training that never happened.
+    """
+    if not sport:
+        return None
+    key = sport.strip().lower().replace("-", "_")
+    if key in _TEAM_SPORTS:
+        return "team"
+    if key in _STRENGTH_SPORTS:
+        return "strength"
+    if key in _RECOVERY_SPORTS:
+        return "recovery"
+    return None
 
 
 def merge_days(batches: list[list[DailyMetrics]]) -> list[DailyMetrics]:

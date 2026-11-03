@@ -304,6 +304,30 @@ def test_sleep_stages_are_summed_when_asleep_is_missing() -> None:
     assert days[0].sleep_hours == pytest.approx(6.75)
 
 
+def test_workout_minutes_come_from_start_and_end() -> None:
+    days = apple_health.parse_payload(
+        {
+            "data": {
+                "workouts": [
+                    {
+                        "name": "Volleyball",
+                        "start": "2026-11-02 19:00:00 +0100",
+                        "end": "2026-11-02 20:30:00 +0100",
+                    }
+                ]
+            }
+        }
+    )
+    assert days[0].workout_minutes == pytest.approx(90.0)
+
+
+def test_workout_duration_falls_back_to_seconds() -> None:
+    days = apple_health.parse_payload(
+        {"data": {"workouts": [{"date": "2026-11-02", "duration": 5400}]}}
+    )
+    assert days[0].workout_minutes == pytest.approx(90.0)
+
+
 def test_payload_without_usable_values_raises() -> None:
     with pytest.raises(WearableError):
         apple_health.parse_payload({"date": "2026-11-02"})

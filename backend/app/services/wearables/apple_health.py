@@ -143,6 +143,29 @@ def _parse_metrics(metrics: list[Any]) -> list[DailyMetrics]:
     return list(by_day.values())
 
 
+def _workout_minutes(workout: dict[str, Any]) -> float | None:
+    """Minutes of a single workout.
+
+    Start and end are preferred because they are unambiguous. ``duration`` is
+    only a fallback: Health Auto Export reports it in seconds, and guessing the
+    unit from the magnitude would turn a long hike into six minutes.
+    """
+    start_text, end_text = workout.get("start"), workout.get("end")
+    if isinstance(start_text, str) and isinstance(end_text, str):
+        try:
+            started = datetime.fromisoformat(start_text[:19].replace(" ", "T"))
+            ended = datetime.fromisoformat(end_text[:19].replace(" ", "T"))
+        except ValueError:
+            pass
+        else:
+            minutes = (ended - started).total_seconds() / 60.0
+            if minutes > 0:
+                return minutes
+
+    seconds = as_float(workout.get("duration"))
+    return seconds / 60.0 if seconds and seconds > 0 else None
+
+
 def _parse_workouts(workouts: list[Any]) -> list[DailyMetrics]:
     minutes_by_day: dict[date, float] = {}
     for workout in workouts:
@@ -151,21 +174,9 @@ def _parse_workouts(workouts: list[Any]) -> list[DailyMetrics]:
         day = _parse_day(workout.get("start") or workout.get("date"))
         if day is None:
             continue
-        duration = as_float(workout.get("duration"))
-        if duration is None:
-            start_text, end_text = workout.get("start"), workout.get("end")
-            if isinstance(start_text, str) and isinstance(end_text, str):
-                try:
-                    started = datetime.fromisoformat(start_text[:19].replace(" ", "T"))
-                    ended = datetime.fromisoformat(end_text[:19].replace(" ", "T"))
-                    duration = (ended - started).total_seconds() / 60.0
-                except ValueError:
-                    duration = None
-        else:
-            # Health Auto Export reports workout duration in seconds.
-            duration = duration / 60.0 if duration > 300 else duration
-        if duration and duration > 0:
-            minutes_by_day[day] = minutes_by_day.get(day, 0.0) + duration
+        minutes = _workout_minutes(workout)
+        if minutes is not None:
+            minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
     return [
         DailyMetrics(day=day, workout_minutes=round(minutes, 1))
         for day, minutes in minutes_by_day.items()

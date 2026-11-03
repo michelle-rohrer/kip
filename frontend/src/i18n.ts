@@ -289,7 +289,7 @@ export const TEXT = defineTranslations({
     disconnectDevice: "Trennen",
     syncNow: "Jetzt synchronisieren",
     newIngestToken: "Neuen Token erzeugen",
-    usePersonalToken: "Mit persönlichem Token verbinden",
+    usePersonalToken: "Ich habe noch einen alten Oura-Token",
     hideSetup: "Abbrechen",
     lastSync: "Letzte Synchronisation",
     lastDeviceData: "Neuste Gerätedaten",
@@ -304,7 +304,7 @@ export const TEXT = defineTranslations({
     copy: "Kopieren",
     copied: "Kopiert",
     ouraTokenHelp:
-      "Erstelle auf cloud.ouraring.com einen «Personal Access Token» und füge ihn hier ein. Dafür braucht es keine Entwickler-Registrierung.",
+      "Oura stellt keine neuen persönlichen Tokens mehr aus und schaltet die bestehenden bald ab. Dieser Weg funktioniert nur noch, wenn du bereits einen Token hast – sonst muss deine Trainerin Oura auf dem Server freischalten.",
     ouraTokenLabel: "Oura Personal Access Token",
     appleHealthHelp:
       "Apple Health hat keine Cloud-Schnittstelle – dein iPhone schickt die Werte selbst an VolleySync. Einmal einrichten, danach läuft es automatisch.",
@@ -622,7 +622,7 @@ export const TEXT = defineTranslations({
     disconnectDevice: "Disconnect",
     syncNow: "Sync now",
     newIngestToken: "Create a new token",
-    usePersonalToken: "Connect with a personal token",
+    usePersonalToken: "I still have an old Oura token",
     hideSetup: "Cancel",
     lastSync: "Last sync",
     lastDeviceData: "Newest device data",
@@ -637,7 +637,7 @@ export const TEXT = defineTranslations({
     copy: "Copy",
     copied: "Copied",
     ouraTokenHelp:
-      "Create a personal access token at cloud.ouraring.com and paste it here. No developer registration needed.",
+      "Oura no longer issues new personal tokens and will switch off the existing ones. This route only works if you already hold a token - otherwise your coach has to enable Oura on the server.",
     ouraTokenLabel: "Oura personal access token",
     appleHealthHelp:
       "Apple Health has no cloud API – your iPhone sends the values to VolleySync itself. Set it up once, then it runs automatically.",
@@ -954,7 +954,7 @@ export const TEXT = defineTranslations({
     disconnectDevice: "Scollega",
     syncNow: "Sincronizza ora",
     newIngestToken: "Genera un nuovo token",
-    usePersonalToken: "Collega con un token personale",
+    usePersonalToken: "Ho ancora un vecchio token Oura",
     hideSetup: "Annulla",
     lastSync: "Ultima sincronizzazione",
     lastDeviceData: "Dati più recenti",
@@ -969,7 +969,7 @@ export const TEXT = defineTranslations({
     copy: "Copia",
     copied: "Copiato",
     ouraTokenHelp:
-      "Crea un «personal access token» su cloud.ouraring.com e incollalo qui. Non serve alcuna registrazione da sviluppatore.",
+      "Oura non rilascia più nuovi token personali e disattiverà quelli esistenti. Questa via funziona solo se ne possiedi già uno, altrimenti l'allenatrice deve abilitare Oura sul server.",
     ouraTokenLabel: "Token personale Oura",
     appleHealthHelp:
       "Apple Health non ha un'API cloud: è il tuo iPhone a inviare i valori a VolleySync. Si configura una volta sola, poi va da sé.",

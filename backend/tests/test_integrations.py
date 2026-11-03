@@ -1331,3 +1331,53 @@ def test_a_refused_authorisation_explains_itself(
     assert "status=denied" in location
     assert "invalid_scope" in location
     assert "read%3Aprofile" in location or "read:profile" in location
+
+
+def test_oura_needs_a_registered_application(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Oura stopped issuing personal tokens, so OAuth is the only way in.
+
+    This used to report Oura as always available, which sent every new player
+    to a page where she can no longer get a token.
+    """
+    monkeypatch.delenv("OURA_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OURA_CLIENT_SECRET", raising=False)
+    assert oura.is_configured() is False
+
+    monkeypatch.setenv("OURA_CLIENT_ID", "id")
+    monkeypatch.setenv("OURA_CLIENT_SECRET", "secret")
+    assert oura.is_configured() is True
+
+
+def test_oura_does_not_ask_for_scopes_it_never_uses(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OURA_SCOPES", raising=False)
+    granted = oura.scopes().split()
+    assert "session" not in granted
+    assert set(granted) == {"personal", "daily", "heartrate", "workout"}
+
+
+def test_oura_scopes_can_be_overridden_without_a_deploy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OURA_SCOPES", "daily workout")
+    assert oura.scopes() == "daily workout"
+
+
+def test_a_collection_oura_refuses_is_reported_not_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing scope used to mean data vanished silently, forever."""
+
+    def fake_get(url: str, **kwargs: Any) -> FakeResponse:
+        if url.endswith("/workout"):
+            return FakeResponse({"detail": "not found"}, 404)
+        return FakeResponse({"data": []})
+
+    monkeypatch.setattr(oura.httpx, "get", fake_get)
+    skipped: list[str] = []
+    oura.fetch_daily(
+        access_token="token",
+        start=date(2026, 11, 1),
+        end=date(2026, 11, 3),
+        skipped=skipped,
+    )
+    assert skipped == ["workout"]

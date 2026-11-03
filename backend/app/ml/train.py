@@ -66,7 +66,17 @@ def _build_dataset(db: Session) -> pd.DataFrame:
 
 
 def _feature_columns(df: pd.DataFrame) -> list[str]:
-    ignore = {"date", "phase", "session_type", "overload_risk_3d", "player_id", "is_synthetic"}
+    # Categorical columns stay in the frame for readability but are fed to the
+    # model only through their one-hot dummies.
+    ignore = {
+        "date",
+        "phase",
+        "session_type",
+        "participation_status",
+        "overload_risk_3d",
+        "player_id",
+        "is_synthetic",
+    }
     return [c for c in df.columns if c not in ignore]
 
 

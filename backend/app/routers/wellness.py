@@ -38,6 +38,36 @@ def create_wellness_entry(
     return entry
 
 
+@router.put("/", response_model=WellnessEntryResponse)
+def upsert_wellness_entry(
+    payload: WellnessEntryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.PLAYER)),
+) -> WellnessEntry:
+    """Save today's check-in, overwriting an earlier one for the same date.
+
+    POST refuses a second entry per day, which left a player stuck with a typo
+    she could not correct. This is the endpoint the app uses.
+    """
+    entry = (
+        db.query(WellnessEntry)
+        .filter(
+            WellnessEntry.player_id == current_user.id,
+            WellnessEntry.date == payload.date,
+        )
+        .one_or_none()
+    )
+    if entry is None:
+        entry = WellnessEntry(player_id=current_user.id, **payload.model_dump())
+        db.add(entry)
+    else:
+        for field, value in payload.model_dump().items():
+            setattr(entry, field, value)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
 @router.get("/", response_model=list[WellnessEntryResponse])
 def list_own_wellness(
     db: Session = Depends(get_db),

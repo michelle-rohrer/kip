@@ -12,6 +12,7 @@ from app.routers import (
     auth_router,
     cycle_router,
     injury_router,
+    integrations_router,
     predictions_router,
     privacy_router,
     teams_router,
@@ -38,7 +39,7 @@ app = FastAPI(
 )
 
 allowed_origins = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173").split(",")
     if origin.strip()
 ]
@@ -47,11 +48,17 @@ allowed_hosts = [
     for host in os.getenv("TRUSTED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
     if host.strip()
 ]
+# Optional regex for hosters that generate a new preview domain per deploy,
+# e.g. CORS_ALLOW_ORIGIN_REGEX=https://volleysync-.*\.vercel\.app
+allowed_origin_regex = os.getenv("CORS_ALLOW_ORIGIN_REGEX") or None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
+    allow_origin_regex=allowed_origin_regex,
+    # The app authenticates with bearer tokens, so cookies are never needed -
+    # and "*" is only a legal origin when credentials are off.
+    allow_credentials="*" not in allowed_origins,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -81,6 +88,12 @@ app.include_router(injury_router)
 app.include_router(privacy_router)
 app.include_router(predictions_router)
 app.include_router(teams_router)
+app.include_router(integrations_router)
+
+
+@app.get("/", tags=["system"])
+def root() -> dict[str, str]:
+    return {"name": "VolleySync API", "docs": "/docs", "health": "/health"}
 
 
 @app.get("/health", tags=["system"])

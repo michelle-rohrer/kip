@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from app.models import CycleEntry, InjuryEntry, TrainingEntry, WellnessEntry
+from app.models import CycleEntry, InjuryEntry, TrainingEntry, WearableDaily, WellnessEntry
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,12 @@ def build_player_feature_frame(
         .order_by(InjuryEntry.date.asc(), InjuryEntry.id.asc())
         .all()
     )
+    wearable_rows = (
+        db.query(WearableDaily)
+        .filter(WearableDaily.player_id == player_id)
+        .order_by(WearableDaily.date.asc(), WearableDaily.id.asc())
+        .all()
+    )
 
     df_train = pd.DataFrame(
         [
@@ -66,6 +72,10 @@ def build_player_feature_frame(
                 "intensity": r.intensity,
                 "session_rpe": r.session_rpe,
                 "session_type": r.session_type if r.session_type is not None else "team",
+                "participation_status": (
+                    r.participation_status if r.participation_status is not None else "full"
+                ),
+                "jump_count": r.jump_count,
                 "daily_load": (
                     float(r.duration_min) * float(r.intensity) / 90.0
                     if r.duration_min is not None and r.intensity is not None
@@ -115,7 +125,32 @@ def build_player_feature_frame(
         ]
     )
 
-    if df_wellness.empty and df_train.empty and df_cycle.empty and df_injury.empty:
+    # Several providers can report the same day; keep the first value that is
+    # present per metric so Whoop and Oura complement rather than overwrite.
+    wearable_by_date: dict[object, dict[str, float | None]] = {}
+    for r in wearable_rows:
+        bucket = wearable_by_date.setdefault(r.date, {"date": r.date})
+        for column, value in (
+            ("wearable_sleep_hours", r.sleep_hours),
+            ("wearable_sleep_score", r.sleep_score),
+            ("wearable_readiness", r.readiness_score),
+            ("wearable_hrv_ms", r.hrv_ms),
+            ("wearable_resting_hr", r.resting_hr),
+            ("wearable_strain", r.strain),
+        ):
+            if bucket.get(column) is None and value is not None:
+                bucket[column] = float(value)
+    df_wearable = pd.DataFrame(list(wearable_by_date.values()))
+    if not df_wearable.empty:
+        df_wearable["wearable_available"] = 1
+
+    if (
+        df_wellness.empty
+        and df_train.empty
+        and df_cycle.empty
+        and df_injury.empty
+        and df_wearable.empty
+    ):
         return pd.DataFrame()
 
     base_dates = pd.DataFrame(
@@ -125,6 +160,7 @@ def build_player_feature_frame(
                 | set(df_train.get("date", []))
                 | set(df_cycle.get("date", []))
                 | set(df_injury.get("date", []))
+                | set(df_wearable.get("date", []))
             )
         }
     )
@@ -137,12 +173,23 @@ def build_player_feature_frame(
         df = df.merge(df_cycle, on="date", how="left")
     if not df_injury.empty:
         df = df.merge(df_injury, on="date", how="left")
+    if not df_wearable.empty:
+        df = df.merge(df_wearable, on="date", how="left")
+
+    # A device-measured night beats the 7 h fallback used for missing input.
+    if "wearable_sleep_hours" in df.columns:
+        if "sleep_hours" in df.columns:
+            df["sleep_hours"] = df["sleep_hours"].fillna(df["wearable_sleep_hours"])
+        else:
+            df["sleep_hours"] = df["wearable_sleep_hours"]
 
     defaults = {
         "duration_min": 0,
         "intensity": 0,
         "session_rpe": 0,
         "session_type": "team",
+        "participation_status": "full",
+        "jump_count": 0,
         "daily_load": 0.0,
         "sleep_hours": 7.0,
         "sleep_quality": 6,
@@ -159,6 +206,15 @@ def build_player_feature_frame(
         "injury_pain_intensity": 0,
         "injury_medical_attention": 0,
         "injury_time_loss_days": 0,
+        # Neutral device values, not zeros: a resting heart rate of 0 would
+        # look like the most alarming day a player ever had.
+        "wearable_available": 0,
+        "wearable_sleep_hours": 7.0,
+        "wearable_sleep_score": 70,
+        "wearable_readiness": 70,
+        "wearable_hrv_ms": 50.0,
+        "wearable_resting_hr": 60.0,
+        "wearable_strain": 10.0,
     }
     for col, value in defaults.items():
         if col not in df.columns:
@@ -202,6 +258,25 @@ def build_player_feature_frame(
         exp_std = df[col].expanding(min_periods=5).std().replace(0, 1.0)
         df[f"{col}_zscore"] = ((df[col] - exp_mean) / exp_std).fillna(0.0)
 
+    # Device metrics only say something relative to the player's own baseline:
+    # an HRV of 45 ms is fine for one athlete and a warning sign for another.
+    wearable_cols = [
+        "wearable_readiness",
+        "wearable_hrv_ms",
+        "wearable_resting_hr",
+        "wearable_sleep_score",
+    ]
+    for col in wearable_cols:
+        df[f"{col}_ma7"] = df[col].rolling(window=7, min_periods=1).mean()
+        exp_mean = df[col].expanding(min_periods=5).mean()
+        exp_std = df[col].expanding(min_periods=5).std().replace(0, 1.0)
+        df[f"{col}_zscore"] = ((df[col] - exp_mean) / exp_std).fillna(0.0)
+
+    # Training that had to be modified or skipped is itself a load signal.
+    df["modified_participation_flag"] = (
+        df["participation_status"].isin(["modified", "individual", "rest"]).astype(int)
+    )
+
     df["phase_intensity_interaction"] = df["intensity"] * (df["phase"] == "luteal").astype(int)
     df["session_rpe_x_intensity"] = df["session_rpe"] * df["intensity"]
     df["sleep_energy_interaction"] = df["sleep_hours"] * df["mental_energy"]
@@ -218,6 +293,7 @@ def build_player_feature_frame(
 
     phase_dummies = pd.get_dummies(df["phase"], prefix="phase")
     session_type_dummies = pd.get_dummies(df["session_type"], prefix="session_type")
-    df = pd.concat([df, phase_dummies, session_type_dummies], axis=1)
+    participation_dummies = pd.get_dummies(df["participation_status"], prefix="participation")
+    df = pd.concat([df, phase_dummies, session_type_dummies, participation_dummies], axis=1)
 
     return df

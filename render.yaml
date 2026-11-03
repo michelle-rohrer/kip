@@ -1,0 +1,129 @@
+# Render Blueprint fuer VolleySync
+#
+# Legt zwei Services an:
+#   1. volleysync-api      -> FastAPI-Backend (Docker, Plan "starter" = immer wach)
+#   2. volleysync-app      -> React-Frontend als Static Site (gratis)
+#
+# Die Datenbank kommt von Neon (https://neon.tech, dauerhaft gratis).
+# Schritt-fuer-Schritt-Anleitung: docs/Deployment_Anleitung.md
+#
+# Werte mit "sync: false" fragt Render beim ersten Deploy im Dashboard ab bzw.
+# muessen dort einmalig gesetzt werden.
+
+services:
+  - type: web
+    name: volleysync-api
+    runtime: docker
+    plan: starter # ~7 USD/Monat, keine Cold Starts
+    region: frankfurt
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    branch: main
+    envVars:
+      # --- Pflicht ---
+      - key: DATABASE_URL
+        sync: false # Connection String aus Neon (postgresql://...?sslmode=require)
+      - key: JWT_SECRET_KEY
+        sync: false # mind. 32 Zeichen, z. B. `openssl rand -hex 32`
+      - key: CORS_ALLOW_ORIGINS
+        sync: false # z. B. https://volleysync-app.onrender.com
+      - key: TRUSTED_HOSTS
+        sync: false # z. B. volleysync-api.onrender.com
+
+      # --- Wearables (Whoop, Oura, Apple Health) ---
+      # API_BASE_URL baut die OAuth-Rueckkehr-URL und die Apple-Health-URL,
+      # FRONTEND_BASE_URL ist die Seite, auf der die Spielerin danach landet.
+      - key: API_BASE_URL
+        sync: false # z. B. https://volleysync-api.onrender.com
+      - key: FRONTEND_BASE_URL
+        sync: false # z. B. https://volleysync-app.onrender.com
+      # Verschluesselt die Whoop-/Oura-Tokens in der Datenbank.
+      # Render erzeugt den Wert einmalig - nie nachtraeglich aendern, sonst
+      # muessen alle Spielerinnen ihr Geraet neu verbinden.
+      - key: WEARABLE_ENCRYPTION_KEY
+        generateValue: true
+      # Schuetzt /api/integrations/sync-all (optionaler naechtlicher Cron).
+      - key: CRON_SECRET
+        generateValue: true
+      # Optional: nur noetig fuer Whoop bzw. Oura-OAuth. Ohne diese Werte
+      # blendet die App den jeweiligen Knopf aus - Oura geht trotzdem ueber
+      # einen persoenlichen Token, Apple Health braucht hier gar nichts.
+      - key: WHOOP_CLIENT_ID
+        sync: false
+      - key: WHOOP_CLIENT_SECRET
+        sync: false
+      - key: OURA_CLIENT_ID
+        sync: false
+      - key: OURA_CLIENT_SECRET
+        sync: false
+
+      # --- Coach-Konto beim ersten Start anlegen (Coach-Registrierung ist gesperrt) ---
+      - key: BOOTSTRAP_COACH_USERNAME
+        sync: false
+      - key: BOOTSTRAP_COACH_PASSWORD
+        sync: false
+      - key: BOOTSTRAP_COACH_NAME
+        sync: false
+      - key: BOOTSTRAP_TEAMS
+        value: BTV Aarau F1,Eaglets NNV
+
+      # --- Fixe Produktionswerte ---
+      - key: APP_ENV
+        value: production
+      - key: SECURE_TRANSPORT_ONLY
+        value: "true"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "60"
+      - key: AUTH_RATE_LIMIT_WINDOW_SECONDS
+        value: "60"
+      - key: AUTH_RATE_LIMIT_MAX_ATTEMPTS
+        value: "10"
+      - key: WEB_CONCURRENCY
+        value: "2"
+      - key: ML_MIN_REAL_ROWS
+        value: "500"
+      - key: ML_MIN_POSITIVE_ROWS
+        value: "20"
+      - key: ML_ALLOW_SYNTHETIC_BOOTSTRAP
+        value: "true"
+
+  - type: web
+    name: volleysync-app
+    runtime: static
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # z. B. https://volleysync-api.onrender.com
+    routes:
+      # Single-Page-App: jede Route liefert index.html aus.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Gehashte Build-Dateien duerfen ewig im Cache bleiben ...
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      # ... index.html und Service Worker nie, sonst sehen die Spielerinnen
+      # nach einem Update weiterhin die alte Version.
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin

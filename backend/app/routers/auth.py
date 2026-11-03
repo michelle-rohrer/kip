@@ -41,7 +41,7 @@ def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)) -
     ip = request.client.host if request.client else "unknown"
     check_auth_rate_limit(action="login", key=f"{ip}:{payload.username}")
     user = authenticate_user(db, username=payload.username, password=payload.password)
-    access_token, refresh_token = issue_tokens(user)
+    access_token, refresh_token = issue_tokens(db, user)
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
@@ -52,8 +52,8 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> Toke
 
 
 @router.post("/logout", response_model=MessageResponse)
-def logout(payload: RefreshTokenRequest) -> MessageResponse:
-    logout_refresh_token(payload.refresh_token)
+def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> MessageResponse:
+    logout_refresh_token(db, payload.refresh_token)
     return MessageResponse(detail="Logged out")
 
 

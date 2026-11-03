@@ -5,13 +5,27 @@ Track smart. Play strong.
 VolleySync ist ein Full-Stack-Projekt fuer zyklusbewusste Belastungssteuerung im Volleyball.  
 Spielerinnen erfassen Wellness-, Zyklus-, Trainings- und Verletzungsdaten. Trainerinnen erhalten eine priorisierte Team-Uebersicht mit Risiko-Signalen.
 
+Schlaf, HRV, Ruhepuls und Erholung muss niemand von Hand eintippen: Whoop, Oura und
+Apple Health lassen sich direkt verbinden (`docs/Wearables_Anleitung.md`).
+
 ## Tech Stack
 
 - Backend: FastAPI, SQLAlchemy, Alembic, scikit-learn
-- Frontend: React, Vite, TypeScript, Tailwind
+- Frontend: React, Vite, TypeScript, Tailwind (installierbare PWA, Hell-/Dunkelmodus, DE/EN/IT)
 - Datenbank: PostgreSQL
+- Wearables: Whoop (OAuth), Oura (OAuth oder persoenlicher Token), Apple Health (Push vom iPhone)
 - Orchestrierung: Docker Compose
 - CI/CD: GitHub Actions (CI, Staging Deploy, Production Deploy)
+- Hosting: Render (Backend + Static Site) und Neon (Postgres) -> `render.yaml`
+
+## Live gehen
+
+Komplette Anleitung: `docs/Deployment_Anleitung.md`
+
+Kurzfassung: Neon-Datenbank anlegen -> Render Blueprint aus `render.yaml` starten ->
+`DATABASE_URL`, `JWT_SECRET_KEY`, `CORS_ALLOW_ORIGINS`, `TRUSTED_HOSTS`, `VITE_API_BASE_URL`
+und die `BOOTSTRAP_COACH_*`-Variablen setzen. Migrationen und das Anlegen von Teams/Coach
+laufen beim Start automatisch (`backend/start.sh`).
 
 ## Schnellstart (lokal mit Docker)
 
@@ -27,7 +41,9 @@ Spielerinnen erfassen Wellness-, Zyklus-, Trainings- und Verletzungsdaten. Train
 
 - DB-Migrationen anwenden:
   - `cd backend && alembic upgrade head`
-- Synthetische Daten seeden:
+- Teams und Coach-Konto anlegen (idempotent, laeuft in Produktion automatisch):
+  - `cd backend && python -m app.bootstrap`
+- Synthetische Daten seeden (nur lokal/Test - loescht alle Daten!):
   - `cd backend && python -m app.data_generation.seed`
 - Modell manuell trainieren:
   - `cd backend && python -m app.ml.retrain`
@@ -62,13 +78,22 @@ kip/
 │   ├── app/
 │   │   ├── routers/
 │   │   ├── services/
+│   │   │   ├── wearables/    # Whoop, Oura, Apple Health + Sync
+│   │   │   └── crypto.py     # Verschluesselung der Geraete-Tokens
 │   │   ├── models/
-│   │   └── ml/
+│   │   ├── ml/
+│   │   └── bootstrap.py      # Teams + Coach-Konto beim Start
 │   ├── alembic/
+│   ├── start.sh              # Migration + Bootstrap + uvicorn
 │   └── tests/
 ├── frontend/
+│   ├── public/               # PWA-Manifest, Icons, Service Worker
 │   └── src/
+│       ├── components/       # UI-Bausteine, Charts, Views
+│       ├── api.ts            # API-Client inkl. Token-Refresh
+│       └── i18n.ts
 ├── docs/
+├── render.yaml               # Hosting-Blueprint
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
@@ -77,6 +102,8 @@ kip/
 ## Doku
 
 - Gesamtuebersicht + Vorgehen: `docs/Projektdokumentation_Gesamt.md`
+- Deployment (oeffentlich stellen): `docs/Deployment_Anleitung.md`
+- Whoop / Oura / Apple Health verbinden: `docs/Wearables_Anleitung.md`
 - Live-Update Anleitung (Staging/Production): `docs/Live_Update_Anleitung.md`
 - Historische Phasen-Dokumentation: `docs/Phase_1_Dokumentation.md` bis `docs/Phase_9_Dokumentation.md`
 
@@ -97,8 +124,12 @@ Frontend:
 ## Security-Hinweise
 
 - Passwoerter werden mit `bcrypt` gehasht.
-- In Produktion ist ein sicherer `JWT_SECRET_KEY` Pflicht.
+- In Produktion ist ein sicherer `JWT_SECRET_KEY` Pflicht (mind. 32 Zeichen).
 - Auth-Endpoints sind serverseitig rate-limited.
+- Refresh-Tokens liegen in der Datenbank (`refresh_sessions`), werden bei jeder
+  Nutzung rotiert und ueberleben einen Deploy - Logout wirkt sofort.
+- `app.data_generation.seed` darf nie in Produktion laufen: der Befehl loescht alle
+  Daten und legt Testkonten mit Passwoertern an, die im Repository stehen.
 
 ## Release-Flow (Kurz)
 

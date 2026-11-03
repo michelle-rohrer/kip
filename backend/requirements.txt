@@ -6,6 +6,7 @@ psycopg2-binary
 pydantic
 email-validator
 python-jose[cryptography]
+cryptography
 bcrypt
 scikit-learn
 joblib

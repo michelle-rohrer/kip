@@ -25,21 +25,47 @@
           --brand: #7a94ff;
         }
       }
-      * { box-sizing: border-box; }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         padding: 2.5rem 1.25rem 5rem;
         background: var(--bg);
         color: var(--ink);
-        font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font:
+          16px/1.65 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
       }
-      main { max-width: 46rem; margin: 0 auto; }
-      h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .4rem; }
-      h2 { font-size: 1.15rem; margin: 2.4rem 0 .6rem; }
-      p, li { color: var(--muted); }
-      li { margin-bottom: .35rem; }
-      a { color: var(--brand); }
-      .lede { font-size: 1.05rem; }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.9rem;
+        line-height: 1.2;
+        margin: 0 0 0.4rem;
+      }
+      h2 {
+        font-size: 1.15rem;
+        margin: 2.4rem 0 0.6rem;
+      }
+      p,
+      li {
+        color: var(--muted);
+      }
+      li {
+        margin-bottom: 0.35rem;
+      }
+      a {
+        color: var(--brand);
+      }
+      .lede {
+        font-size: 1.05rem;
+      }
       .card {
         background: var(--card);
         border: 1px solid var(--line);
@@ -47,12 +73,42 @@
         padding: 1.1rem 1.25rem;
         margin: 1.5rem 0;
       }
-      .card p:last-child, .card ul:last-child { margin-bottom: 0; }
-      table { width: 100%; border-collapse: collapse; margin: .8rem 0; font-size: .94rem; }
-      th, td { text-align: left; padding: .55rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-      th { color: var(--ink); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
-      .meta { font-size: .85rem; color: var(--muted); margin-top: 3rem; border-top: 1px solid var(--line); padding-top: 1rem; }
-      .back { display: inline-block; margin-bottom: 1.5rem; font-weight: 600; text-decoration: none; }
+      .card p:last-child,
+      .card ul:last-child {
+        margin-bottom: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0.8rem 0;
+        font-size: 0.94rem;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 0.55rem 0.5rem;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        color: var(--ink);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .meta {
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-top: 3rem;
+        border-top: 1px solid var(--line);
+        padding-top: 1rem;
+      }
+      .back {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        text-decoration: none;
+      }
     </style>
   </head>
   <body>
@@ -60,9 +116,9 @@
       <a class="back" href="/">← Zurück zu VolleySync</a>
       <h1>Datenschutzerklärung</h1>
       <p class="lede">
-        VolleySync erfasst Trainings-, Wellness- und Zyklusdaten von Volleyballspielerinnen,
-        um Belastung zyklusbewusst zu steuern. Diese Seite beschreibt, welche Daten das sind,
-        wofür sie verwendet werden und wer sie sieht.
+        VolleySync erfasst Trainings-, Wellness- und Zyklusdaten von Volleyballspielerinnen, um
+        Belastung zyklusbewusst zu steuern. Diese Seite beschreibt, welche Daten das sind, wofür sie
+        verwendet werden und wer sie sieht.
       </p>
 
       <h2>Verantwortliche Stelle</h2>
@@ -76,17 +132,26 @@
       <h2>Welche Daten erfasst werden</h2>
       <table>
         <thead>
-          <tr><th>Kategorie</th><th>Inhalt</th><th>Herkunft</th></tr>
+          <tr>
+            <th>Kategorie</th>
+            <th>Inhalt</th>
+            <th>Herkunft</th>
+          </tr>
         </thead>
         <tbody>
           <tr>
             <td>Konto</td>
-            <td>Name, Benutzername, E-Mail-Adresse, Passwort (nur als Hash), Team, Spielposition</td>
+            <td>
+              Name, Benutzername, E-Mail-Adresse, Passwort (nur als Hash), Team, Spielposition
+            </td>
             <td>bei der Registrierung angegeben</td>
           </tr>
           <tr>
             <td>Wellness</td>
-            <td>Schlafdauer und -qualität, Muskelkater, mentale Energie, Stress, Motivation, Belastungsempfinden</td>
+            <td>
+              Schlafdauer und -qualität, Muskelkater, mentale Energie, Stress, Motivation,
+              Belastungsempfinden
+            </td>
             <td>selbst eingetragen</td>
           </tr>
           <tr>
@@ -101,26 +166,35 @@
           </tr>
           <tr>
             <td>Schmerz und Verletzung</td>
-            <td>Körperstelle, Schmerzintensität, medizinische Betreuung, Ausfalltage, Beschreibung</td>
+            <td>
+              Körperstelle, Schmerzintensität, medizinische Betreuung, Ausfalltage, Beschreibung
+            </td>
             <td>selbst eingetragen</td>
           </tr>
           <tr>
             <td>Gerätedaten</td>
-            <td>Schlafdauer, Schlaf-Score, Erholung, HRV, Ruhepuls, Atemfrequenz, Schritte, Kalorien, Workout-Dauer und -Sportart</td>
+            <td>
+              Schlafdauer, Schlaf-Score, Erholung, HRV, Ruhepuls, Atemfrequenz, Schritte, Kalorien,
+              Workout-Dauer und -Sportart
+            </td>
             <td>nur bei verbundenem Gerät</td>
           </tr>
         </tbody>
       </table>
-      <p>
-        Die App berechnet daraus einen persönlichen Risiko-Score für Überlastung.
-      </p>
+      <p>Die App berechnet daraus einen persönlichen Risiko-Score für Überlastung.</p>
 
       <h2>Wofür die Daten verwendet werden</h2>
       <ul>
         <li>Rückmeldung an die Spielerin über ihre eigene Belastung und Erholung</li>
-        <li>Priorisierte Team-Übersicht für die Trainerin – <strong>nur mit ausdrücklicher Freigabe</strong></li>
+        <li>
+          Priorisierte Team-Übersicht für die Trainerin –
+          <strong>nur mit ausdrücklicher Freigabe</strong>
+        </li>
         <li>Training des Risiko-Modells innerhalb dieser App</li>
-        <li>Wissenschaftliche Auswertung im Rahmen einer Studienarbeit – ausschliesslich anonymisiert oder aggregiert</li>
+        <li>
+          Wissenschaftliche Auswertung im Rahmen einer Studienarbeit – ausschliesslich anonymisiert
+          oder aggregiert
+        </li>
       </ul>
       <p>
         Die Daten werden nicht verkauft, nicht für Werbung genutzt und nicht an Dritte
@@ -134,15 +208,13 @@
           der App unter <em>Datenfreigaben</em> getrennt, ob ihre Wellness-Daten und ob ihre
           Zyklusdaten freigegeben werden. Ohne Freigabe sind sie für die Trainerin nicht abrufbar –
           das ist technisch durchgesetzt, nicht nur eine Einstellung in der Anzeige. Gerätedaten
-          fallen unter dieselbe Freigabe wie Wellness-Daten. Eine Freigabe kann jederzeit
-          widerrufen werden und wirkt sofort.
+          fallen unter dieselbe Freigabe wie Wellness-Daten. Eine Freigabe kann jederzeit widerrufen
+          werden und wirkt sofort.
         </p>
       </div>
 
       <h2>Gerätedaten von Whoop, Oura und Apple Health</h2>
-      <p>
-        Das Verbinden eines Geräts ist freiwillig und jederzeit widerrufbar.
-      </p>
+      <p>Das Verbinden eines Geräts ist freiwillig und jederzeit widerrufbar.</p>
       <ul>
         <li>
           <strong>Whoop und Oura:</strong> Beim Verbinden meldet sich die Spielerin direkt beim
@@ -166,16 +238,34 @@
 
       <h2>Wo die Daten liegen</h2>
       <table>
-        <thead><tr><th>Dienst</th><th>Zweck</th><th>Ort</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Dienst</th>
+            <th>Zweck</th>
+            <th>Ort</th>
+          </tr>
+        </thead>
         <tbody>
-          <tr><td>Neon</td><td>Datenbank</td><td>Frankfurt, Deutschland (AWS eu-central-1)</td></tr>
-          <tr><td>Render</td><td>Server der App</td><td>Frankfurt, Deutschland</td></tr>
-          <tr><td>Vercel</td><td>Auslieferung der Weboberfläche</td><td>weltweites CDN; es werden dabei keine Gesundheitsdaten übertragen</td></tr>
+          <tr>
+            <td>Neon</td>
+            <td>Datenbank</td>
+            <td>Frankfurt, Deutschland (AWS eu-central-1)</td>
+          </tr>
+          <tr>
+            <td>Render</td>
+            <td>Server der App</td>
+            <td>Frankfurt, Deutschland</td>
+          </tr>
+          <tr>
+            <td>Vercel</td>
+            <td>Auslieferung der Weboberfläche</td>
+            <td>weltweites CDN; es werden dabei keine Gesundheitsdaten übertragen</td>
+          </tr>
         </tbody>
       </table>
       <p>
-        Die Verbindung ist durchgehend verschlüsselt (HTTPS). Passwörter werden ausschliesslich
-        als Hash gespeichert, Zugangsschlüssel zu Geräten verschlüsselt.
+        Die Verbindung ist durchgehend verschlüsselt (HTTPS). Passwörter werden ausschliesslich als
+        Hash gespeichert, Zugangsschlüssel zu Geräten verschlüsselt.
       </p>
 
       <h2>Speicherdauer und Löschung</h2>
@@ -184,8 +274,8 @@
           Jede Spielerin kann ihr Konto jederzeit selbst löschen: in der App unter
           <em>Datenfreigaben</em> ganz unten, <em>Konto und Daten löschen</em>. Damit werden alle
           Wellness-, Zyklus-, Trainings- und Verletzungsdaten, alle Gerätedaten, alle Freigaben und
-          das Konto selbst sofort und endgültig entfernt – auch in der Ansicht der Trainerin.
-          Eine Wiederherstellung ist danach nicht möglich.
+          das Konto selbst sofort und endgültig entfernt – auch in der Ansicht der Trainerin. Eine
+          Wiederherstellung ist danach nicht möglich.
         </p>
       </div>
       <p>

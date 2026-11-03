@@ -53,12 +53,26 @@ export type InjuryEntry = {
 
 export type CyclePhase = "menstruation" | "follicular" | "ovulation" | "luteal";
 
+export type MenstrualFlow = "none" | "light" | "medium" | "heavy";
+
+/** What the app works out from her recorded period days. */
+export type CycleEstimate = {
+  date: string;
+  available: boolean;
+  cycle_day: number | null;
+  phase: CyclePhase | null;
+  cycle_length: number | null;
+  period_start: string | null;
+  flow: MenstrualFlow | null;
+};
+
 export type CycleEntry = {
   id: number;
   date: string;
   cycle_day: number | null;
   phase: CyclePhase | null;
   cycle_length: number | null;
+  menstrual_flow: MenstrualFlow | null;
   pms_score: number | null;
   cramps: boolean;
   migraine: boolean;

@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.dependencies import require_role
 from app.models import CycleEntry, User, UserRole
-from app.schemas.cycle import CycleEntryCreate, CycleEntryResponse
+from app.schemas.cycle import CycleEntryCreate, CycleEntryResponse, CycleEstimateResponse
+from app.services.cycle import estimate_for, fill_in
 from app.services.privacy import assert_coach_can_view_cycle
 
 router = APIRouter(prefix="/api/cycle", tags=["cycle"])
@@ -53,15 +54,47 @@ def upsert_cycle_entry(
         )
         .one_or_none()
     )
+    # Derive cycle day, phase and length from her recorded period days when
+    # she left them empty. Anything she typed herself is left untouched.
+    values = fill_in(db, player_id=current_user.id, payload=payload.model_dump())
     if entry is None:
-        entry = CycleEntry(player_id=current_user.id, **payload.model_dump())
+        entry = CycleEntry(player_id=current_user.id, **values)
         db.add(entry)
     else:
-        for field, value in payload.model_dump().items():
+        for field, value in values.items():
             setattr(entry, field, value)
     db.commit()
     db.refresh(entry)
     return entry
+
+
+@router.get("/estimate", response_model=CycleEstimateResponse)
+def estimate_cycle(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.PLAYER)),
+    day: date | None = Query(default=None, alias="date"),
+    flow: str | None = Query(default=None),
+) -> CycleEstimateResponse:
+    """Which cycle day and phase ``date`` falls on, from her period history.
+
+    Lets the form show what it would save before she saves it, so a wrong
+    estimate can be corrected rather than silently accepted.
+    """
+    target = day or date.today()
+    # The form passes what the player just ticked, so the preview reflects it
+    # before anything is saved.
+    estimate = estimate_for(db, player_id=current_user.id, day=target, flow=flow)
+    if estimate is None:
+        return CycleEstimateResponse(date=target, available=False)
+    return CycleEstimateResponse(
+        date=target,
+        available=True,
+        cycle_day=estimate.cycle_day,
+        phase=estimate.phase,
+        cycle_length=estimate.cycle_length,
+        period_start=estimate.period_start,
+        flow=estimate.flow,
+    )
 
 
 @router.get("/", response_model=list[CycleEntryResponse])

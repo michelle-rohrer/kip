@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,12 @@ from app.services.auth import hash_password, reset_auth_state
 from app.services.crypto import decrypt_secret, encrypt_secret, hash_ingest_token
 from app.services.wearables import apple_health, oura, whoop
 from app.services.wearables import service as wearables
-from app.services.wearables.base import WearableError
+from app.services.wearables.base import (
+    DailyMetrics,
+    TokenBundle,
+    WearableAuthError,
+    WearableError,
+)
 
 
 @pytest.fixture()
@@ -612,6 +617,221 @@ def test_sync_all_requires_the_cron_secret(
     ok = api_client.post("/api/integrations/sync-all", headers={"X-Cron-Secret": "nightly-secret"})
     assert ok.status_code == 200
     assert ok.json()["connections"] == 0
+
+
+def test_oauth_callback_stores_tokens_and_returns_to_the_app(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WHOOP_CLIENT_ID", "client-123")
+    monkeypatch.setenv("WHOOP_CLIENT_SECRET", "secret-456")
+    monkeypatch.setenv("FRONTEND_BASE_URL", "https://app.example.com")
+
+    monkeypatch.setattr(
+        whoop,
+        "exchange_code",
+        lambda **kwargs: TokenBundle(
+            access_token="whoop-access",
+            refresh_token="whoop-refresh",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scope=whoop.SCOPES,
+            external_user_id="whoop-user-9",
+        ),
+    )
+    monkeypatch.setattr(
+        whoop,
+        "fetch_daily",
+        lambda **kwargs: [
+            DailyMetrics(day=date.today(), readiness_score=66, hrv_ms=47.5, resting_hr=52.0)
+        ],
+    )
+
+    state = wearables.build_state_token(player_id=player["id"], provider=WearableProvider.WHOOP)
+    res = api_client.get(
+        "/api/integrations/callback/whoop",
+        params={"code": "auth-code", "state": state},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303, res.text
+    assert res.headers["location"].startswith("https://app.example.com/?")
+    assert "status=connected" in res.headers["location"]
+
+    connection = wearables.get_connection(
+        db_session, player_id=player["id"], provider=WearableProvider.WHOOP
+    )
+    assert connection is not None
+    assert connection.external_user_id == "whoop-user-9"
+    assert decrypt_secret(connection.access_token) == "whoop-access"
+    assert decrypt_secret(connection.refresh_token) == "whoop-refresh"
+    assert connection.last_sync_status == "ok"
+
+    row = (
+        db_session.query(WearableDaily)
+        .filter(WearableDaily.provider == WearableProvider.WHOOP)
+        .one()
+    )
+    assert row.readiness_score == 66
+
+
+def test_oauth_callback_with_a_stale_state_does_not_connect(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    res = api_client.get(
+        "/api/integrations/callback/whoop",
+        params={"code": "auth-code", "state": "not-a-real-state"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert "status=error" in res.headers["location"]
+    assert (
+        wearables.get_connection(
+            db_session, player_id=player["id"], provider=WearableProvider.WHOOP
+        )
+        is None
+    )
+
+
+def test_oauth_callback_reports_a_declined_consent(api_client: TestClient) -> None:
+    res = api_client.get(
+        "/api/integrations/callback/whoop",
+        params={"error": "access_denied"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert "status=denied" in res.headers["location"]
+
+
+def test_state_token_is_bound_to_one_provider(player: dict[str, Any]) -> None:
+    state = wearables.build_state_token(player_id=player["id"], provider=WearableProvider.WHOOP)
+    assert wearables.read_state_token(state, provider=WearableProvider.WHOOP) == player["id"]
+    with pytest.raises(HTTPException):
+        wearables.read_state_token(state, provider=WearableProvider.OURA)
+
+
+def test_an_expired_access_token_is_refreshed_before_syncing(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WHOOP_CLIENT_ID", "client-123")
+    monkeypatch.setenv("WHOOP_CLIENT_SECRET", "secret-456")
+
+    connection = wearables.store_tokens(
+        db_session,
+        player_id=player["id"],
+        provider=WearableProvider.WHOOP,
+        bundle=TokenBundle(
+            access_token="stale-access",
+            refresh_token="good-refresh",
+            expires_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        ),
+    )
+
+    refreshed: list[str] = []
+
+    def fake_refresh(refresh_token: str) -> TokenBundle:
+        refreshed.append(refresh_token)
+        return TokenBundle(
+            access_token="fresh-access",
+            refresh_token="rotated-refresh",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+    used_tokens: list[str] = []
+
+    def fake_fetch(*, access_token: str, start: date, end: date) -> list[DailyMetrics]:
+        used_tokens.append(access_token)
+        return [DailyMetrics(day=end, readiness_score=70)]
+
+    monkeypatch.setattr(whoop, "refresh_access_token", fake_refresh)
+    monkeypatch.setattr(whoop, "fetch_daily", fake_fetch)
+
+    summary = wearables.sync_connection(db_session, connection, days=7)
+
+    assert refreshed == ["good-refresh"]
+    assert used_tokens == ["fresh-access"]
+    assert summary.days_written == 1
+    db_session.refresh(connection)
+    assert decrypt_secret(connection.access_token) == "fresh-access"
+    assert decrypt_secret(connection.refresh_token) == "rotated-refresh"
+
+
+def test_a_failed_sync_is_recorded_on_the_connection(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = wearables.store_tokens(
+        db_session,
+        player_id=player["id"],
+        provider=WearableProvider.OURA,
+        bundle=TokenBundle(access_token="pat", scope="personal-access-token"),
+    )
+    monkeypatch.setattr(
+        oura,
+        "fetch_daily",
+        lambda **kwargs: (_ for _ in ()).throw(WearableError("Oura rate limit reached")),
+    )
+
+    res = api_client.post("/api/integrations/oura/sync", headers=player["headers"])
+    assert res.status_code == 502
+    assert "rate limit" in res.json()["detail"]
+
+    db_session.refresh(connection)
+    assert connection.last_sync_status == "failed"
+    assert "rate limit" in (connection.last_error or "")
+
+    listed = api_client.get("/api/integrations/", headers=player["headers"]).json()
+    oura_row = next(row for row in listed if row["provider"] == "oura")
+    assert oura_row["last_sync_status"] == "failed"
+
+
+def test_revoked_access_surfaces_as_unauthorized(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wearables.store_tokens(
+        db_session,
+        player_id=player["id"],
+        provider=WearableProvider.OURA,
+        bundle=TokenBundle(access_token="pat", scope="personal-access-token"),
+    )
+    monkeypatch.setattr(
+        oura,
+        "fetch_daily",
+        lambda **kwargs: (_ for _ in ()).throw(WearableAuthError("please reconnect")),
+    )
+    res = api_client.post("/api/integrations/oura/sync", headers=player["headers"])
+    assert res.status_code == 401
+
+
+def test_sync_never_erases_a_value_with_a_later_blank(
+    player: dict[str, Any], db_session: Session
+) -> None:
+    today = date.today()
+    wearables.store_days(
+        db_session,
+        player_id=player["id"],
+        provider=WearableProvider.OURA,
+        days=[DailyMetrics(day=today, sleep_hours=7.5, hrv_ms=55.0)],
+    )
+    # A later pull that only knows the readiness score must keep the rest.
+    wearables.store_days(
+        db_session,
+        player_id=player["id"],
+        provider=WearableProvider.OURA,
+        days=[DailyMetrics(day=today, readiness_score=80)],
+    )
+    row = db_session.query(WearableDaily).filter(WearableDaily.player_id == player["id"]).one()
+    assert row.sleep_hours == pytest.approx(7.5)
+    assert row.hrv_ms == pytest.approx(55.0)
+    assert row.readiness_score == 80
 
 
 def test_ingest_token_hash_is_stable() -> None:

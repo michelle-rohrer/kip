@@ -424,7 +424,9 @@ def test_oura_rejects_an_invalid_personal_token(
         headers=player["headers"],
         json={"token": "wrong-token-value"},
     )
-    assert res.status_code == 401
+    # 409, not 401: a bad Oura token must not look like an expired VolleySync
+    # session, or the app signs the player out over a copy-paste slip.
+    assert res.status_code == 409
 
 
 def test_oura_access_token_is_not_stored_in_plain_text(
@@ -855,7 +857,7 @@ def test_a_failed_sync_is_recorded_on_the_connection(
     assert oura_row["last_sync_status"] == "failed"
 
 
-def test_revoked_access_surfaces_as_unauthorized(
+def test_revoked_access_asks_the_player_to_reconnect(
     api_client: TestClient,
     player: dict[str, Any],
     db_session: Session,
@@ -873,7 +875,7 @@ def test_revoked_access_surfaces_as_unauthorized(
         lambda **kwargs: (_ for _ in ()).throw(WearableAuthError("please reconnect")),
     )
     res = api_client.post("/api/integrations/oura/sync", headers=player["headers"])
-    assert res.status_code == 401
+    assert res.status_code == 409
 
 
 def test_sync_never_erases_a_value_with_a_later_blank(
@@ -948,10 +950,10 @@ def test_wellness_suggestion_without_data_is_404(
 # ------------------------------------------------- regressions found on the way
 
 
-def test_training_entry_keeps_jump_count_and_participation(
+def test_training_entry_keeps_the_participation_status(
     api_client: TestClient, player: dict[str, Any]
 ) -> None:
-    """These two were collected by the form but dropped by the schema."""
+    """The form collected this, but the schema had dropped the column."""
     res = api_client.post(
         "/api/training/",
         headers=player["headers"],
@@ -961,16 +963,15 @@ def test_training_entry_keeps_jump_count_and_participation(
             "intensity": 7,
             "session_rpe": 6,
             "session_type": "team",
-            "jump_count": 120,
             "participation_status": "modified",
         },
     )
     assert res.status_code == 201, res.text
-    assert res.json()["jump_count"] == 120
     assert res.json()["participation_status"] == "modified"
 
     listed = api_client.get("/api/training/", headers=player["headers"]).json()
-    assert listed[0]["jump_count"] == 120
+    assert listed[0]["participation_status"] == "modified"
+    assert "jump_count" not in listed[0]
 
 
 def test_training_rejects_an_unknown_participation_status(

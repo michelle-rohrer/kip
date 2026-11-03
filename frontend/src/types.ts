@@ -72,7 +72,6 @@ export type TrainingEntry = {
   date: string;
   duration_min: number | null;
   intensity: number | null;
-  jump_count: number | null;
   session_rpe: number | null;
   session_type: string | null;
   participation_status: string | null;

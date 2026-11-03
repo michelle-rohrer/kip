@@ -1,6 +1,7 @@
 """Pydantic schemas package."""
 
 from app.schemas.auth import (
+    AccountDeleteRequest,
     MessageResponse,
     RefreshTokenRequest,
     TokenResponse,
@@ -12,6 +13,7 @@ from app.schemas.predictions import ModelTrainingStatusResponse, RiskPredictionR
 from app.schemas.teams import TeamResponse
 
 __all__ = [
+    "AccountDeleteRequest",
     "MessageResponse",
     "RefreshTokenRequest",
     "TokenResponse",

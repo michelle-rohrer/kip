@@ -98,12 +98,10 @@ Im Repo liegt `render.yaml`. Render liest die Datei und erstellt beide Services 
 | `API_BASE_URL` | vorlaeufig `https://volleysync-api.onrender.com` |
 | `FRONTEND_BASE_URL` | `https://volleysync.vercel.app` (bzw. die Render-Frontend-URL) |
 
-> **Wichtig bei den Teams:** Eine Trainerin sieht nur Spielerinnen **ihres eigenen Teams**.
-> `BOOTSTRAP_TEAMS` steht standardmaessig auf zwei Teams und dein Coach-Konto landet im
-> ersten davon. Wenn du alle Spielerinnen in einer Uebersicht willst, setze
-> `BOOTSTRAP_TEAMS` auf genau **ein** Team – sonst registriert sich die Haelfte in ein
-> Team, das du nicht siehst. Mit `BOOTSTRAP_COACH_TEAM` bestimmst du, in welches Team
-> dein Coach-Konto kommt.
+> **Teams:** Eine Trainerin sieht nur Spielerinnen **ihres eigenen Teams**. `BOOTSTRAP_TEAMS`
+> steht deshalb auf genau einem Team (`BTV Aarau F1`) – dort landen alle Spielerinnen und
+> dein Coach-Konto. Brauchst du spaeter ein zweites Team, kommt es kommagetrennt dazu, dann
+> aber mit einem eigenen Coach-Konto pro Team.
 
 `WEARABLE_ENCRYPTION_KEY` und `CRON_SECRET` erzeugt Render selbst – dort nichts eintragen.
 Die Whoop-/Oura-Variablen bleiben vorerst leer; sie sind nur fuer die Geraete-Anbindung
@@ -240,8 +238,10 @@ keine Rechtsberatung, aber diese Punkte solltest du vorher erledigen:
 - [ ] Spielerinnen erklaeren, dass **Zyklus- und Wellnessdaten nur nach eigener Freigabe** beim Coach
       landen (Menue -> Datenfreigaben)
 - [ ] Fuer die Thesis: nur **anonymisierte/aggregierte** Auswertungen verwenden
-- [ ] Loeschung auf Wunsch: aktuell nur direkt in der Datenbank moeglich – als naechstes Feature
-      einplanen (steht schon in `backlog.txt`)
+- [ ] Spielerinnen zeigen, wo sie ihr Konto loeschen: Menue -> *Datenfreigaben* -> ganz unten
+      **Konto und Daten loeschen**. Das entfernt sofort und endgueltig alle Wellness-, Zyklus-,
+      Trainings- und Verletzungsdaten sowie verbundene Geraete – auch in der Coach-Ansicht.
+      Coach-Konten lassen sich so nicht loeschen, die haengen an den ENV-Variablen.
 
 ---
 

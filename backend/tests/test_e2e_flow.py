@@ -83,7 +83,6 @@ def test_e2e_register_login_submit_wellness_and_get_prediction(db_session: Sessi
                 "date": "2026-05-20",
                 "duration_min": 85,
                 "intensity": 7,
-                "jump_count": 110,
             },
         )
         assert training_res.status_code == 201, training_res.text

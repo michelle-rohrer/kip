@@ -139,3 +139,111 @@ def test_register_rejects_coach_role(client: TestClient) -> None:
         },
     )
     assert res.status_code == 403
+
+
+def _register_and_login(client: TestClient, username: str) -> str:
+    created = client.post(
+        "/api/auth/register",
+        json={
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": "SuperSecret123",
+            "role": "player",
+            "name": "Delete Me",
+        },
+    )
+    assert created.status_code == 201, created.text
+    tokens = client.post(
+        "/api/auth/login",
+        json={"username": username, "password": "SuperSecret123"},
+    )
+    assert tokens.status_code == 200, tokens.text
+    return tokens.json()["access_token"]
+
+
+def test_delete_account_removes_the_player_and_her_data(
+    client: TestClient, db_session: Session
+) -> None:
+    from datetime import date
+
+    from app.models import CycleEntry, RefreshSession, WellnessEntry
+
+    token = _register_and_login(client, "player_delete")
+    headers = {"Authorization": f"Bearer {token}"}
+    player_id = client.get("/api/auth/me", headers=headers).json()["id"]
+
+    db_session.add_all(
+        [
+            WellnessEntry(player_id=player_id, date=date(2026, 11, 1), sleep_hours=7.0),
+            CycleEntry(player_id=player_id, date=date(2026, 11, 1), cycle_day=3),
+        ]
+    )
+    db_session.commit()
+
+    deleted = client.request(
+        "DELETE",
+        "/api/auth/me",
+        headers=headers,
+        json={"password": "SuperSecret123"},
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    assert db_session.get(User, player_id) is None
+    assert db_session.query(WellnessEntry).filter(WellnessEntry.player_id == player_id).count() == 0
+    assert db_session.query(CycleEntry).filter(CycleEntry.player_id == player_id).count() == 0
+    # Refresh sessions have no ORM relationship, so they are the one thing a
+    # cascade would not have taken care of.
+    assert db_session.query(RefreshSession).filter(RefreshSession.user_id == player_id).count() == 0
+
+    assert client.get("/api/auth/me", headers=headers).status_code == 401
+
+
+def test_delete_account_requires_the_right_password(
+    client: TestClient, db_session: Session
+) -> None:
+    token = _register_and_login(client, "player_keep")
+    headers = {"Authorization": f"Bearer {token}"}
+    player_id = client.get("/api/auth/me", headers=headers).json()["id"]
+
+    refused = client.request(
+        "DELETE",
+        "/api/auth/me",
+        headers=headers,
+        json={"password": "WrongPassword123"},
+    )
+    # 403 rather than 401 so the app keeps the session and shows the reason.
+    assert refused.status_code == 403
+    assert db_session.get(User, player_id) is not None
+
+
+def test_delete_account_needs_authentication(client: TestClient) -> None:
+    res = client.request("DELETE", "/api/auth/me", json={"password": "SuperSecret123"})
+    assert res.status_code == 401
+
+
+def test_coach_account_cannot_be_deleted_through_the_app(
+    client: TestClient, db_session: Session
+) -> None:
+    coach = User(
+        username="coach_delete",
+        email="coach_delete@example.com",
+        password_hash=hash_password("SuperSecret123"),
+        role=UserRole.COACH,
+        name="Coach",
+    )
+    db_session.add(coach)
+    db_session.commit()
+
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "coach_delete", "password": "SuperSecret123"},
+    ).json()["access_token"]
+
+    res = client.request(
+        "DELETE",
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"password": "SuperSecret123"},
+    )
+    assert res.status_code == 403
+    assert db_session.get(User, coach.id) is not None

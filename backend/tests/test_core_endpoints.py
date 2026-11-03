@@ -245,7 +245,7 @@ def test_training_coach_same_team(api_client: TestClient, team_and_users: dict) 
         api_client.post(
             "/api/training/",
             headers=player_headers,
-            json={"date": "2026-03-12", "duration_min": 90, "intensity": 7, "jump_count": 120},
+            json={"date": "2026-03-12", "duration_min": 90, "intensity": 7},
         ).status_code
         == 201
     )

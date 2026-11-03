@@ -94,7 +94,6 @@ export type TrainingForm = {
   session_rpe: number;
   session_type: "team" | "strength" | "technical" | "recovery";
   participation_status: "full" | "modified" | "individual" | "rest";
-  jump_count: string;
 };
 
 export type InjuryForm = {
@@ -946,16 +945,6 @@ export function TrainingView({
             />
           </div>
 
-          <Field label={t.jumpCountOptional}>
-            <TextInput
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={form.jump_count}
-              onChange={(event) => onChange({ jump_count: event.target.value })}
-            />
-          </Field>
-
           <Button type="submit" loading={isLoading} block className="sm:w-auto sm:px-8">
             {isLoading ? t.saving : t.saveTraining}
           </Button>
@@ -978,7 +967,6 @@ export function TrainingView({
                   mapSessionTypeLabel(entry.session_type, t),
                   mapParticipationLabel(entry.participation_status, t),
                   entry.session_rpe === null ? null : `sRPE ${entry.session_rpe}`,
-                  entry.jump_count === null ? null : `${entry.jump_count} ${t.jumpsShort}`,
                 ]
                   .filter((part) => part && part !== "-")
                   .join(" · ")}
@@ -1149,68 +1137,138 @@ export function InjuryView({
 
 /* =============================================================== privacy */
 
+function DeleteAccountCard({
+  t,
+  isDeleting,
+  onDelete,
+}: {
+  t: T;
+  isDeleting: boolean;
+  onDelete: (password: string) => void;
+}) {
+  const [armed, setArmed] = useState(false);
+  const [password, setPassword] = useState("");
+
+  function reset() {
+    setArmed(false);
+    setPassword("");
+  }
+
+  return (
+    <Card className="animate-fadeUp border-danger/30">
+      <CardHeader
+        title={t.deleteAccountTitle}
+        subtitle={t.deleteAccountIntro}
+        icon={<IconAlert size={20} />}
+        tone="danger"
+      />
+      {armed ? (
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (password) onDelete(password);
+          }}
+        >
+          <p className="rounded-xl bg-danger-soft px-4 py-3 text-sm font-semibold leading-snug text-danger">
+            {t.deleteAccountWarning}
+          </p>
+          <Field label={t.deleteAccountPassword}>
+            <TextInput
+              type="password"
+              value={password}
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="danger" loading={isDeleting} disabled={!password}>
+              {t.deleteAccountConfirm}
+            </Button>
+            <Button type="button" variant="ghost" onClick={reset}>
+              {t.cancel}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button variant="danger" onClick={() => setArmed(true)}>
+          {t.deleteAccount}
+        </Button>
+      )}
+    </Card>
+  );
+}
+
 export function PrivacyView({
   t,
   consents,
   onToggle,
   onSave,
+  isDeleting,
+  onDeleteAccount,
 }: {
   t: T;
   consents: PrivacyConsent[];
   onToggle: (consentId: number, update: Partial<PrivacyConsent>) => void;
   onSave: (consent: PrivacyConsent) => void;
+  isDeleting: boolean;
+  onDeleteAccount: (password: string) => void;
 }) {
   return (
-    <Card className="animate-fadeUp">
-      <CardHeader
-        title={t.privacySettings}
-        subtitle={t.privacyIntro}
-        icon={<IconShield size={20} />}
-        tone="ok"
-      />
-      {consents.length === 0 ? (
-        <EmptyState icon={<IconShield size={22} />} title={t.noConsents} />
-      ) : (
-        <div className="space-y-4">
-          {consents.map((consent) => (
-            <div key={consent.id} className="rounded-xl border border-line p-4">
-              <div className="mb-3 flex items-center gap-3">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft font-display font-bold text-brand-ink">
-                  {(consent.coach_name ?? "C").slice(0, 1).toUpperCase()}
-                </span>
-                <div>
-                  <p className="font-semibold text-ink">
-                    {consent.coach_name ?? `${t.coach} ${consent.coach_id}`}
-                  </p>
-                  <p className="text-xs text-muted">{t.coach}</p>
+    <>
+      <Card className="animate-fadeUp">
+        <CardHeader
+          title={t.privacySettings}
+          subtitle={t.privacyIntro}
+          icon={<IconShield size={20} />}
+          tone="ok"
+        />
+        {consents.length === 0 ? (
+          <EmptyState icon={<IconShield size={22} />} title={t.noConsents} />
+        ) : (
+          <div className="space-y-4">
+            {consents.map((consent) => (
+              <div key={consent.id} className="rounded-xl border border-line p-4">
+                <div className="mb-3 flex items-center gap-3">
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-soft font-display font-bold text-brand-ink">
+                    {(consent.coach_name ?? "C").slice(0, 1).toUpperCase()}
+                  </span>
+                  <div>
+                    <p className="font-semibold text-ink">
+                      {consent.coach_name ?? `${t.coach} ${consent.coach_id}`}
+                    </p>
+                    <p className="text-xs text-muted">{t.coach}</p>
+                  </div>
                 </div>
+                <div className="space-y-2.5">
+                  <Switch
+                    label={t.shareWellness}
+                    checked={consent.share_wellness_data}
+                    onChange={(value) => onToggle(consent.id, { share_wellness_data: value })}
+                  />
+                  <Switch
+                    label={t.shareCycle}
+                    description={t.privacyNoteCycle}
+                    tone="bloom"
+                    checked={consent.share_cycle_data}
+                    onChange={(value) => onToggle(consent.id, { share_cycle_data: value })}
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  className="mt-3 w-full sm:w-auto"
+                  icon={<IconCheck size={18} />}
+                  onClick={() => onSave(consent)}
+                >
+                  {t.save}
+                </Button>
               </div>
-              <div className="space-y-2.5">
-                <Switch
-                  label={t.shareWellness}
-                  checked={consent.share_wellness_data}
-                  onChange={(value) => onToggle(consent.id, { share_wellness_data: value })}
-                />
-                <Switch
-                  label={t.shareCycle}
-                  description={t.privacyNoteCycle}
-                  tone="bloom"
-                  checked={consent.share_cycle_data}
-                  onChange={(value) => onToggle(consent.id, { share_cycle_data: value })}
-                />
-              </div>
-              <Button
-                variant="secondary"
-                className="mt-3 w-full sm:w-auto"
-                icon={<IconCheck size={18} />}
-                onClick={() => onSave(consent)}
-              >
-                {t.save}
-              </Button>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <DeleteAccountCard t={t} isDeleting={isDeleting} onDelete={onDeleteAccount} />
+    </>
   );
 }

@@ -5,6 +5,7 @@ from app.db import get_db
 from app.dependencies import get_current_user
 from app.models import User, UserRole
 from app.schemas import (
+    AccountDeleteRequest,
     MessageResponse,
     RefreshTokenRequest,
     TokenResponse,
@@ -14,6 +15,7 @@ from app.schemas import (
 )
 from app.services.auth import (
     authenticate_user,
+    delete_account,
     issue_tokens,
     logout_refresh_token,
     refresh_tokens,
@@ -60,3 +62,20 @@ def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> Messa
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_me(
+    payload: AccountDeleteRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Delete the signed-in player's account and all of her data.
+
+    Rate limited like a login: the body carries a password, so repeated calls
+    would otherwise be a way to test guesses.
+    """
+    ip = request.client.host if request.client else "unknown"
+    check_auth_rate_limit(action="delete-account", key=f"{ip}:{current_user.username}")
+    delete_account(db, current_user, password=payload.password)

@@ -1,5 +1,4 @@
 import os
-import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -115,13 +114,12 @@ def register_user(db: Session, user_in: UserCreate) -> User:
 
     team_id = user_in.team_id
     if user_in.role == UserRole.PLAYER and team_id is None:
-        preferred_team_names = ("BTV Aarau F1", "Eaglets NNV")
-        preferred_teams = (
-            db.execute(select(Team).where(Team.name.in_(preferred_team_names))).scalars().all()
-        )
-        available_teams = preferred_teams or db.execute(select(Team)).scalars().all()
-        if available_teams:
-            team_id = secrets.choice(available_teams).id
+        # Only fill this in when the choice is unambiguous. Picking a team at
+        # random used to drop players into a squad their coach cannot see, and
+        # nothing in the app would ever point at the cause.
+        teams = db.execute(select(Team)).scalars().all()
+        if len(teams) == 1:
+            team_id = teams[0].id
 
     training_uid: str | None = None
     if user_in.role == UserRole.PLAYER:
@@ -207,6 +205,40 @@ def refresh_tokens(db: Session, refresh_token: str) -> tuple[str, str]:
 def logout_refresh_token(db: Session, refresh_token: str) -> None:
     session, _ = _load_active_session(db, refresh_token)
     session.revoked_at = _now_utc()
+    db.commit()
+
+
+def delete_account(db: Session, user: User, *, password: str) -> None:
+    """Erase a player and everything she ever entered.
+
+    Health and cycle data are special-category personal data, so "delete my
+    account" has to mean exactly that - not a flag that hides the rows. The
+    ORM relationships cascade to cycle, wellness, training, injury, risk,
+    consent and wearable records; refresh sessions have no relationship on
+    ``User`` and are removed explicitly, or the foreign key would block the
+    delete.
+
+    The password is re-checked because this is irreversible and a stolen
+    access token should not be enough to wipe a season of data.
+    """
+    if user.role != UserRole.PLAYER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Coach accounts cannot be deleted through the app - "
+                "they are managed through the server configuration."
+            ),
+        )
+    if not verify_password(password, user.password_hash):
+        # Deliberately not 401: the session is fine, the confirmation is wrong.
+        # The app treats 401 as "you have been signed out" and would throw the
+        # player back to the login screen instead of showing the real reason.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Password is not correct")
+
+    db.query(RefreshSession).filter(RefreshSession.user_id == user.id).delete(
+        synchronize_session=False
+    )
+    db.delete(user)
     db.commit()
 
 

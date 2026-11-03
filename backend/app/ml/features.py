@@ -75,7 +75,6 @@ def build_player_feature_frame(
                 "participation_status": (
                     r.participation_status if r.participation_status is not None else "full"
                 ),
-                "jump_count": r.jump_count,
                 "daily_load": (
                     float(r.duration_min) * float(r.intensity) / 90.0
                     if r.duration_min is not None and r.intensity is not None
@@ -189,7 +188,6 @@ def build_player_feature_frame(
         "session_rpe": 0,
         "session_type": "team",
         "participation_status": "full",
-        "jump_count": 0,
         "daily_load": 0.0,
         "sleep_hours": 7.0,
         "sleep_quality": 6,

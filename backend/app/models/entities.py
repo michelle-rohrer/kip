@@ -170,10 +170,10 @@ class TrainingEntry(Base):
     intensity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_rpe: Mapped[int | None] = mapped_column(Integer, nullable=True)
     session_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    # Jump count and participation status are what the app has always asked for
-    # in the training form; they were dropped from the schema by accident and
-    # every value a player typed in was silently discarded.
-    jump_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The training form has always asked how a player took part; the column
+    # was dropped from the schema by accident and every answer was silently
+    # discarded. Jump count is deliberately not here - nothing in the setup
+    # can count jumps, so asking for it would only invite guesses.
     participation_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     strength_values: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 

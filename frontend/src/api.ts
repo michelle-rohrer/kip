@@ -158,9 +158,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (!(error instanceof ApiError) || error.status !== 401 || !refreshToken) {
       throw error;
     }
+
+    let fresh: string;
     try {
-      const fresh = await refreshAccessToken();
-      return await rawRequest<T>(path, init, fresh);
+      fresh = await refreshAccessToken();
     } catch (refreshError) {
       if (refreshError instanceof ApiError && refreshError.isNetwork) {
         throw refreshError;
@@ -169,6 +170,12 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
       onSessionExpired?.();
       throw new ApiError("session expired", { status: 401 });
     }
+
+    // Only a failed refresh means the session is over. If the retry with a
+    // brand-new token still answers 401, the endpoint is saying something
+    // about the request itself - a wrong password on a confirmation prompt,
+    // for instance - and signing the player out would hide that.
+    return await rawRequest<T>(path, init, fresh);
   }
 }
 

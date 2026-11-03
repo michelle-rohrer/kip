@@ -1,8 +1,10 @@
 import { FormEvent, ReactNode, useState } from "react";
 import {
   CycleEntry,
+  CycleEstimate,
   CyclePhase,
   InjuryEntry,
+  MenstrualFlow,
   Prediction,
   PrivacyConsent,
   TrainingEntry,
@@ -76,9 +78,12 @@ export type WellnessForm = {
 
 export type CycleForm = {
   date: string;
-  cycle_day: number;
-  phase: CyclePhase;
-  cycle_length: number;
+  /** The one thing she knows without counting. */
+  menstrual_flow: MenstrualFlow;
+  /** Left empty unless she opens "von Hand anpassen" - the app derives them. */
+  cycle_day: number | null;
+  phase: CyclePhase | null;
+  cycle_length: number | null;
   pms_score: number;
   cramps: boolean;
   migraine: boolean;
@@ -685,6 +690,7 @@ export function CycleView({
   entries,
   suggestion,
   onApplySuggestion,
+  estimate,
 }: {
   t: T;
   locale: string;
@@ -695,7 +701,9 @@ export function CycleView({
   entries: CycleEntry[];
   suggestion: DeviceSuggestions | null;
   onApplySuggestion: () => void;
+  estimate: CycleEstimate | null;
 }) {
+  const [manual, setManual] = useState(false);
   const cy = suggestion?.cycle ?? null;
   const suggestionParts = !cy
     ? []
@@ -704,6 +712,13 @@ export function CycleView({
         cy.phase === null ? null : mapPhaseLabel(cy.phase, t),
         cy.cycle_length === null ? null : `${t.cycleLength} ${cy.cycle_length}`,
       ].filter((part): part is string => Boolean(part));
+
+  const flowOptions: Array<{ value: MenstrualFlow; label: string }> = [
+    { value: "none", label: t.flowNone },
+    { value: "light", label: t.flow_light },
+    { value: "medium", label: t.flow_medium },
+    { value: "heavy", label: t.flow_heavy },
+  ];
 
   const phases: Array<{ value: CyclePhase; label: string }> = [
     { value: "menstruation", label: t.phaseMenstruation },
@@ -733,31 +748,71 @@ export function CycleView({
           </Field>
 
           <div>
-            <span className="field-label">{t.phase}</span>
+            <span className="field-label">{t.periodToday}</span>
             <Segmented
               className="mt-1"
               tone="bloom"
-              options={phases}
-              value={form.phase}
-              onChange={(value) => onChange({ phase: value })}
+              options={flowOptions}
+              value={form.menstrual_flow}
+              onChange={(value) => onChange({ menstrual_flow: value })}
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Stepper
-              label={t.cycleDay}
-              value={form.cycle_day}
-              onChange={(value) => onChange({ cycle_day: value })}
-              min={1}
-              max={60}
-            />
-            <Stepper
-              label={t.cycleLength}
-              value={form.cycle_length}
-              onChange={(value) => onChange({ cycle_length: value })}
-              min={20}
-              max={45}
-            />
+          {/* Cycle day, phase and length are worked out from her recorded
+              period days. Shown, not asked - but correctable, because a
+              derivation is a guess and she may know better. */}
+          <div className="rounded-xl border border-line bg-raised p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="field-label !mb-0">{t.derivedTitle}</span>
+              <button
+                type="button"
+                onClick={() => setManual((open) => !open)}
+                className="text-xs font-semibold text-brand underline"
+              >
+                {manual ? t.derivedUseAuto : t.derivedAdjust}
+              </button>
+            </div>
+
+            {manual ? (
+              <div className="mt-3 space-y-4">
+                <Segmented
+                  tone="bloom"
+                  options={phases}
+                  value={form.phase ?? estimate?.phase ?? "menstruation"}
+                  onChange={(value) => onChange({ phase: value })}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Stepper
+                    label={t.cycleDay}
+                    value={form.cycle_day ?? estimate?.cycle_day ?? 1}
+                    onChange={(value) => onChange({ cycle_day: value })}
+                    min={1}
+                    max={60}
+                  />
+                  <Stepper
+                    label={t.cycleLength}
+                    value={form.cycle_length ?? estimate?.cycle_length ?? 28}
+                    onChange={(value) => onChange({ cycle_length: value })}
+                    min={20}
+                    max={45}
+                  />
+                </div>
+              </div>
+            ) : estimate?.available ? (
+              <p className="mt-1.5 text-[15px] font-semibold text-ink">
+                {[
+                  estimate.cycle_day === null ? null : `${t.cycleDay} ${estimate.cycle_day}`,
+                  estimate.phase === null ? null : mapPhaseLabel(estimate.phase, t),
+                  estimate.cycle_length === null
+                    ? null
+                    : `${t.cycleLength} ${estimate.cycle_length}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-sm leading-snug text-muted">{t.derivedNotYet}</p>
+            )}
           </div>
 
           <SliderField

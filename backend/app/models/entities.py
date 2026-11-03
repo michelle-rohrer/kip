@@ -133,6 +133,10 @@ class CycleEntry(Base):
         nullable=True,
     )
     cycle_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # "none" | "light" | "medium" | "heavy". The one thing a player actually
+    # knows without counting: whether she has her period today. Cycle day,
+    # phase and length are derived from a run of these.
+    menstrual_flow: Mapped[str | None] = mapped_column(String(16), nullable=True)
     pms_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cramps: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     migraine: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

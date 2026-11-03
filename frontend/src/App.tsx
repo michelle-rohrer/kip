@@ -13,6 +13,7 @@ import {
   AppTab,
   AppleHealthToken,
   CycleEntry,
+  CycleEstimate,
   InjuryEntry,
   IntegrationStatus,
   ModelTrainingStatus,
@@ -126,6 +127,7 @@ function App() {
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [wearableDaily, setWearableDaily] = useState<WearableDaily[]>([]);
   const [suggestion, setSuggestion] = useState<DeviceSuggestions | null>(null);
+  const [cycleEstimate, setCycleEstimate] = useState<CycleEstimate | null>(null);
   const [appleToken, setAppleToken] = useState<AppleHealthToken | null>(null);
   const [busyProvider, setBusyProvider] = useState<WearableProvider | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -143,9 +145,12 @@ function App() {
   });
   const [cycleForm, setCycleForm] = useState<CycleForm>({
     date: todayIso(),
-    cycle_day: 1,
-    phase: "menstruation",
-    cycle_length: 28,
+    menstrual_flow: "none",
+    // Left null on purpose: the server derives them from her period days
+    // unless she opens the manual override.
+    cycle_day: null,
+    phase: null,
+    cycle_length: null,
     pms_score: 0,
     cramps: false,
     migraine: false,
@@ -481,6 +486,25 @@ function App() {
     user,
   ]);
 
+  // What the cycle form would save, recomputed as she changes the date or
+  // ticks the period, so she sees it before pressing save.
+  useEffect(() => {
+    if (user?.role !== "player") return;
+    let cancelled = false;
+    const query = new URLSearchParams({ date: cycleForm.date });
+    if (cycleForm.menstrual_flow) query.set("flow", cycleForm.menstrual_flow);
+    apiRequest<CycleEstimate>(`/api/cycle/estimate?${query.toString()}`)
+      .then((value) => {
+        if (!cancelled) setCycleEstimate(value);
+      })
+      .catch(() => {
+        if (!cancelled) setCycleEstimate(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role, cycleForm.date, cycleForm.menstrual_flow, cycle]);
+
   // Picking another date in the wellness form should offer that day's device
   // values, not yesterday's.
   useEffect(() => {
@@ -643,6 +667,9 @@ function App() {
           notes: cycleForm.notes || null,
         }),
       });
+      // Derived values come back from the server; keep the form on "derive"
+      // so tomorrow's entry is not pinned to today's numbers.
+      setCycleForm((prev) => ({ ...prev, cycle_day: null, phase: null, cycle_length: null }));
       pushToast(t.cycleSaved, "success");
       await loadPlayerData();
     } catch (error) {
@@ -1025,6 +1052,7 @@ function App() {
             entries={cycle}
             suggestion={suggestion}
             onApplySuggestion={handleApplyCycleSuggestion}
+            estimate={cycleEstimate}
           />
         )}
 

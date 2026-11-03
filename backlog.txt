@@ -12,8 +12,10 @@ Streak zur Challenge ausbauen: Rangliste im Team (auf welchem Platz bin ich),
     sollen sich nicht blossgestellt fuehlen, nur weil sie zwei Tage ausliessen
   - Freigabe noetig? Der Streak selbst ist kein Gesundheitswert, aber eine
     Rangliste macht Teilnahme oeffentlich
-Zyklus so ändern, dass man einfach nur Periode eintragen muss und der Rest wird selber errechnet
-  - TEILWEISE ERLEDIGT: die Berechnung gibt es jetzt (app/services/wearables/cycle.py),
-    sie laeuft aber nur fuer Periodentage, die vom Geraet kommen.
-    Offen: dieselbe Ableitung auch auf manuell eingetragene Periodentage anwenden,
-    dann faellt die Eingabe von Zyklustag/Phase/Laenge im Formular ganz weg.
+ERLEDIGT: Zyklus so geaendert, dass man nur noch die Periode eintraegt.
+  Zyklustag, Phase und Zykluslaenge werden berechnet (app/services/cycle.py),
+  aus eigenen Eintraegen und - wo freigegeben - aus Geraetedaten.
+  "Von Hand anpassen" bleibt fuer Faelle, in denen sie es besser weiss.
+
+OFFEN dazu: Oura liefert keine Zyklusdaten (Cycle Insights ist nicht in jedem
+  Konto). Wer Zyklusdaten vom Geraet will, braucht Apple Health.

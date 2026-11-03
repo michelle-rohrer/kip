@@ -78,6 +78,10 @@ class User(Base):
     )
     player_position: Mapped[str | None] = mapped_column(String(32), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # A test account uses the app exactly like a real player, but stays out of
+    # the coach's team overview and out of the training data - otherwise every
+    # trial entry would skew the squad's numbers and the model.
+    is_test_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

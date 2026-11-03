@@ -50,7 +50,11 @@ def _is_synthetic_user(*, username: str, email: str | None) -> bool:
 
 
 def _build_dataset(db: Session) -> pd.DataFrame:
-    players = db.query(User).filter(User.role == UserRole.PLAYER).all()
+    # Test accounts are excluded at the source: a handful of trial entries
+    # would otherwise be learned from as if they were a real athlete.
+    players = (
+        db.query(User).filter(User.role == UserRole.PLAYER, User.is_test_account.is_(False)).all()
+    )
     frames: list[pd.DataFrame] = []
     for p in players:
         f = build_player_feature_frame(db, player_id=p.id, player_position=p.player_position)

@@ -1008,3 +1008,87 @@ def test_wellness_put_overwrites_the_same_day(
 
     entries = api_client.get("/api/wellness/", headers=player["headers"]).json()
     assert len(entries) == 1
+
+
+def test_test_accounts_stay_out_of_the_team_overview(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    """A test account must use the app fully but never skew the squad."""
+    from app.bootstrap import apply_test_accounts
+    from app.routers import predictions_router
+
+    api_client.app.include_router(predictions_router)
+
+    coach = User(
+        username="coach_overview",
+        email="coach_overview@example.com",
+        password_hash=hash_password("SuperSecret123"),
+        role=UserRole.COACH,
+        name="Coach",
+        team_id=player["team_id"],
+    )
+    db_session.add(coach)
+    db_session.commit()
+    coach_headers = {
+        "Authorization": "Bearer "
+        + api_client.post(
+            "/api/auth/login",
+            json={"username": "coach_overview", "password": "SuperSecret123"},
+        ).json()["access_token"]
+    }
+
+    before = api_client.get("/api/predictions/team", headers=coach_headers)
+    assert before.status_code == 200, before.text
+    assert player["id"] in [row["player_id"] for row in before.json()]
+
+    db_session.get(User, player["id"]).is_test_account = True
+    db_session.commit()
+
+    after = api_client.get("/api/predictions/team", headers=coach_headers)
+    assert after.status_code == 200
+    assert player["id"] not in [row["player_id"] for row in after.json()]
+
+    # ...and the player herself still works exactly as before.
+    assert api_client.get("/api/auth/me", headers=player["headers"]).status_code == 200
+    assert api_client.get("/api/auth/me", headers=player["headers"]).json()["is_test_account"]
+
+    # The flag is driven by the environment, so it survives a fresh database.
+    import os
+
+    os.environ["BOOTSTRAP_TEST_PLAYERS"] = ""
+    apply_test_accounts(db_session)
+    assert db_session.get(User, player["id"]).is_test_account is False
+    os.environ["BOOTSTRAP_TEST_PLAYERS"] = "player_wear"
+    apply_test_accounts(db_session)
+    assert db_session.get(User, player["id"]).is_test_account is True
+    del os.environ["BOOTSTRAP_TEST_PLAYERS"]
+
+
+def test_test_accounts_are_excluded_from_training_data(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    from datetime import date as _date
+
+    from app.ml.train import _build_dataset
+    from app.models import WellnessEntry
+
+    for offset in range(8):
+        db_session.add(
+            WellnessEntry(
+                player_id=player["id"],
+                date=_date(2026, 10, 1 + offset),
+                sleep_hours=7.0,
+                sleep_quality=6,
+                muscle_soreness=5,
+                mental_energy=6,
+                stress_level=5,
+                motivation=6,
+            )
+        )
+    db_session.commit()
+
+    assert not _build_dataset(db_session).empty
+
+    db_session.get(User, player["id"]).is_test_account = True
+    db_session.commit()
+    assert _build_dataset(db_session).empty

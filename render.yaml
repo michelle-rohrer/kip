@@ -80,6 +80,10 @@ services:
         sync: false
       - key: BOOTSTRAP_TEAMS
         value: BTV Aarau F1
+      # Testkonten: nutzen die App voll, bleiben aber aus Team-Uebersicht
+      # und Modelltraining draussen.
+      - key: BOOTSTRAP_TEST_PLAYERS
+        value: testspielerin
 
       # --- Fixe Produktionswerte ---
       - key: APP_ENV

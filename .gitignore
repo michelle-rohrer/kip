@@ -31,3 +31,7 @@ build/
 
 # Build artifacts
 frontend/tsconfig.tsbuildinfo
+
+# Neon CLI skills (lokales Werkzeug, gehoert nicht ins Repo)
+.agents/
+skills-lock.json

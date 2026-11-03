@@ -23,6 +23,9 @@ def get_team_predictions(
         .filter(
             User.team_id == current_user.team_id,
             User.role == UserRole.PLAYER,
+            # Test accounts are deliberately invisible here - their trial
+            # entries would otherwise sit in the squad's averages.
+            User.is_test_account.is_(False),
         )
         .all()
     )

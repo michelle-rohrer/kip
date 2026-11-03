@@ -346,6 +346,7 @@ def sync_connection(
             synced_at=_aware(connection.last_sync_at) or _now(),
         )
 
+    skipped: list[str] = []
     try:
         access_token = _ensure_fresh_access_token(db, connection)
         if connection.provider is WearableProvider.WHOOP:
@@ -356,6 +357,7 @@ def sync_connection(
                 start=start,
                 end=end,
                 with_cycle=connection.sync_cycle,
+                skipped=skipped,
             )
     except WearableError as exc:
         connection.last_sync_status = "failed"
@@ -374,7 +376,11 @@ def sync_connection(
     now = _now()
     connection.last_sync_at = now
     connection.last_sync_status = "ok"
-    connection.last_error = None
+    # The pull worked, but a refused collection means data is quietly missing.
+    # Saying so beats leaving the player to wonder where her workouts went.
+    connection.last_error = (
+        f"Not shared by the provider: {', '.join(sorted(skipped))}" if skipped else None
+    )
     connection.updated_at = now
     db.commit()
 

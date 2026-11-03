@@ -2,12 +2,12 @@
 
 Two ways in, because they suit different people:
 
-* **Personal access token** - each player creates one at
-  https://cloud.ouraring.com/personal-access-tokens and pastes it into the app.
-  Nothing has to be registered anywhere, so this works today.
-* **OAuth** - nicer for the player (no copy-paste), but needs a registered Oura
-  application. Enabled automatically once ``OURA_CLIENT_ID``/``OURA_CLIENT_SECRET``
-  are set.
+* **OAuth** - the way in. Needs a registered Oura application; enabled as soon
+  as ``OURA_CLIENT_ID``/``OURA_CLIENT_SECRET`` are set.
+* **Personal access token** - kept as a fallback for players who still hold
+  one. Oura stopped issuing new tokens and will switch the old ones off, so
+  this is no longer offered as a route to anybody who does not already have
+  one.
 
 Oura already reports a local calendar ``day`` per record, so unlike Whoop there
 is no timezone maths to do here.
@@ -37,7 +37,16 @@ from app.services.wearables.base import (
 PROVIDER = "oura"
 DEFAULT_API_BASE = "https://api.ouraring.com"
 DEFAULT_AUTH_BASE = "https://cloud.ouraring.com"
-SCOPES = "personal daily heartrate workout session"
+# Only what the collections below actually need. "session" was in here and is
+# never read - see the Whoop lesson: an unused scope buys nothing and can cost
+# the whole authorisation. Override with OURA_SCOPES if Oura renames them.
+DEFAULT_SCOPES = "personal daily heartrate workout"
+
+
+def scopes() -> str:
+    return os.getenv("OURA_SCOPES", DEFAULT_SCOPES).strip() or DEFAULT_SCOPES
+
+
 REQUEST_TIMEOUT = 30.0
 MAX_PAGES = 20
 
@@ -63,8 +72,15 @@ def is_oauth_configured() -> bool:
 
 
 def is_configured() -> bool:
-    # A personal access token always works, so Oura is never fully unavailable.
-    return True
+    """Oura needs a registered application.
+
+    This used to return True unconditionally because a personal access token
+    always worked. Oura has since stopped issuing new ones, so presenting that
+    as a route would send every new player to a page where she cannot get a
+    token. Existing tokens still work and the endpoint still accepts them,
+    but the app no longer advertises it as the way in.
+    """
+    return is_oauth_configured()
 
 
 def authorize_url(*, state: str, redirect_uri: str) -> str:
@@ -73,7 +89,7 @@ def authorize_url(*, state: str, redirect_uri: str) -> str:
             "response_type": "code",
             "client_id": client_id(),
             "redirect_uri": redirect_uri,
-            "scope": SCOPES,
+            "scope": scopes(),
             "state": state,
         }
     )
@@ -103,7 +119,7 @@ def _token_request(form: dict[str, str]) -> TokenBundle:
         access_token=access_token,
         refresh_token=payload.get("refresh_token"),
         expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
-        scope=payload.get("scope") or SCOPES,
+        scope=payload.get("scope") or scopes(),
     )
 
 
@@ -153,7 +169,12 @@ def verify_token(access_token: str) -> str | None:
 
 
 def _get_documents(
-    *, collection: str, access_token: str, start: date, end: date
+    *,
+    collection: str,
+    access_token: str,
+    start: date,
+    end: date,
+    skipped: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     url = f"{api_base()}/v2/usercollection/{collection}"
     params: dict[str, Any] = {
@@ -174,7 +195,12 @@ def _get_documents(
         if response.status_code == 429:
             raise WearableError("Oura rate limit reached - try again later")
         if response.status_code == 404:
-            # Scope not granted for this collection; the rest still syncs.
+            # The scope for this collection was not granted. The rest still
+            # syncs, but the caller has to be able to say so - silently
+            # returning nothing means the data is missing forever and nobody
+            # ever learns why.
+            if skipped is not None and collection not in skipped:
+                skipped.append(collection)
             return []
         if response.status_code >= 400:
             raise WearableError(f"Oura request failed ({response.status_code}) for {collection}")
@@ -338,11 +364,22 @@ def _cycle_days(documents: list[dict[str, Any]]) -> list[DailyMetrics]:
 
 
 def fetch_daily(
-    *, access_token: str, start: date, end: date, with_cycle: bool = False
+    *,
+    access_token: str,
+    start: date,
+    end: date,
+    with_cycle: bool = False,
+    skipped: list[str] | None = None,
 ) -> list[DailyMetrics]:
+    """Pull the day summaries. Collections Oura refuses land in ``skipped``."""
+
     def collect(collection: str) -> list[dict[str, Any]]:
         return _get_documents(
-            collection=collection, access_token=access_token, start=start, end=end
+            collection=collection,
+            access_token=access_token,
+            start=start,
+            end=end,
+            skipped=skipped,
         )
 
     batches = [

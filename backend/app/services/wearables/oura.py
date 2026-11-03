@@ -37,10 +37,22 @@ from app.services.wearables.base import (
 PROVIDER = "oura"
 DEFAULT_API_BASE = "https://api.ouraring.com"
 DEFAULT_AUTH_BASE = "https://cloud.ouraring.com"
-# Only what the collections below actually need. "session" was in here and is
-# never read - see the Whoop lesson: an unused scope buys nothing and can cost
-# the whole authorisation. Override with OURA_SCOPES if Oura renames them.
-DEFAULT_SCOPES = "personal daily heartrate workout"
+# Only what the collections below actually need.
+#
+# "session" and "personal" were both in here and neither is read on this path.
+# "personal" is the one that matters: Oura shows it to the player as "height,
+# weight and biological sex". Asking an athlete for that - in an app that is
+# already asking her for cycle data - and then never using it is exactly how a
+# consent screen loses trust. It is only needed by verify_token(), which
+# belongs to the retired personal-token route.
+#
+# "heartrate" stays although /heartrate is never called: it is unclear whether
+# Oura gates the heart rate and HRV fields inside the sleep documents behind
+# it, and those carry the app. Dropping a scope on a guess would cost real
+# data; this one is kept deliberately, not by oversight.
+#
+# Override with OURA_SCOPES if Oura renames anything.
+DEFAULT_SCOPES = "daily heartrate workout"
 
 
 def scopes() -> str:

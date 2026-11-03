@@ -459,7 +459,9 @@ function App() {
         "info",
       );
     } else if (result === "denied") {
-      pushToast(t.deviceConnectDenied, "info");
+      // The provider says *why* it refused - dropping that turned every
+      // rejected scope into a shrug for whoever had to debug it.
+      pushToast(message ? `${t.deviceConnectDenied}: ${message}` : t.deviceConnectDenied, "info");
     } else {
       pushToast(message ? `${t.deviceConnectFailed}: ${message}` : t.deviceConnectFailed, "error");
     }

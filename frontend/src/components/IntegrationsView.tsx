@@ -15,7 +15,7 @@ import {
   IconWatch,
 } from "./icons";
 import { Button, Card, CardHeader, Chip, EmptyState, Field, Switch, TextInput } from "./ui";
-import { Tone } from "./theme";
+import { Tone, cx } from "./theme";
 
 type T = Record<string, string>;
 
@@ -204,6 +204,11 @@ function ProviderCard({
 
   const isApple = status.provider === "apple_health";
   const isOura = status.provider === "oura";
+  // "unavailable:daily_cycle_phases" means the sync worked but the provider
+  // withheld a category - a note, not a failure.
+  const unavailable = status.last_error?.startsWith("unavailable:")
+    ? status.last_error.slice("unavailable:".length).split(",").filter(Boolean)
+    : [];
 
   return (
     <Card className="animate-fadeUp">
@@ -237,9 +242,16 @@ function ProviderCard({
       )}
 
       {status.last_error && (
-        <p className="mb-4 flex items-start gap-2 rounded-xl bg-danger-soft px-3.5 py-2.5 text-xs font-semibold leading-snug text-danger">
+        <p
+          className={cx(
+            "mb-4 flex items-start gap-2 rounded-xl px-3.5 py-2.5 text-xs font-semibold leading-snug",
+            unavailable.length > 0 ? "bg-warn-soft text-warn" : "bg-danger-soft text-danger",
+          )}
+        >
           <IconAlert size={15} className="mt-px shrink-0" />
-          {status.last_error}
+          {unavailable.length > 0
+            ? `${t.deviceCollectionsUnavailable} ${unavailable.map((c) => t[`collection_${c}`] ?? c).join(", ")}`
+            : status.last_error}
         </p>
       )}
 

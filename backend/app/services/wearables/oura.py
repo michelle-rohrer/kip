@@ -168,6 +168,11 @@ def verify_token(access_token: str) -> str | None:
     return str(value) if value not in (None, "") else None
 
 
+# Collections not every Oura account has. Cycle Insights in particular is a
+# feature, not a given - a refusal there says nothing about the token.
+OPTIONAL_COLLECTIONS = {"daily_cycle_phases", "workout"}
+
+
 def _get_documents(
     *,
     collection: str,
@@ -176,6 +181,23 @@ def _get_documents(
     end: date,
     skipped: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    """Fetch one collection.
+
+    A refusal is only an authentication problem when it is a 401 on a
+    collection every account has. Anything else - a 403 for a scope that was
+    not granted, or a feature the account does not include - means *this*
+    collection is unavailable, not that the connection is dead. Treating the
+    two the same told players their access had been revoked and sent them to
+    reconnect, which could not help, while throwing away the data that had
+    just arrived fine.
+    """
+    optional = collection in OPTIONAL_COLLECTIONS
+
+    def unavailable() -> list[dict[str, Any]]:
+        if skipped is not None and collection not in skipped:
+            skipped.append(collection)
+        return []
+
     url = f"{api_base()}/v2/usercollection/{collection}"
     params: dict[str, Any] = {
         "start_date": start.isoformat(),
@@ -190,18 +212,15 @@ def _get_documents(
         except httpx.HTTPError as exc:
             raise WearableError(f"Oura is not reachable: {exc}") from exc
 
-        if response.status_code in (401, 403):
+        if response.status_code == 401 and not optional:
             raise WearableAuthError("Oura access was revoked - please reconnect")
+        if response.status_code in (401, 403, 404):
+            # Scope not granted, or a feature this account does not have. The
+            # rest still syncs; the caller reports what was left out so the
+            # data is not simply missing without explanation.
+            return unavailable()
         if response.status_code == 429:
             raise WearableError("Oura rate limit reached - try again later")
-        if response.status_code == 404:
-            # The scope for this collection was not granted. The rest still
-            # syncs, but the caller has to be able to say so - silently
-            # returning nothing means the data is missing forever and nobody
-            # ever learns why.
-            if skipped is not None and collection not in skipped:
-                skipped.append(collection)
-            return []
         if response.status_code >= 400:
             raise WearableError(f"Oura request failed ({response.status_code}) for {collection}")
 

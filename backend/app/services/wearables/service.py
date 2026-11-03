@@ -378,9 +378,9 @@ def sync_connection(
     connection.last_sync_status = "ok"
     # The pull worked, but a refused collection means data is quietly missing.
     # Saying so beats leaving the player to wonder where her workouts went.
-    connection.last_error = (
-        f"Not shared by the provider: {', '.join(sorted(skipped))}" if skipped else None
-    )
+    # Machine-readable on purpose: the app turns this into a sentence in her
+    # own language instead of showing her a raw collection name.
+    connection.last_error = f"unavailable:{','.join(sorted(skipped))}" if skipped else None
     connection.updated_at = now
     db.commit()
 

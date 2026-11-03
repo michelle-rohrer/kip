@@ -178,8 +178,14 @@ def _get_records(*, path: str, access_token: str, start: date, end: date) -> lis
         except httpx.HTTPError as exc:
             raise WearableError(f"Whoop is not reachable: {exc}") from exc
 
-        if response.status_code in (401, 403):
+        if response.status_code == 401:
             raise WearableAuthError("Whoop access was revoked - please reconnect")
+        if response.status_code == 403:
+            # Authenticated, but this scope was not granted. That is not a
+            # dead connection - the other endpoints still deliver.
+            raise WearableError(
+                f"Whoop did not grant access to {path} - check the scopes of the app"
+            )
         if response.status_code == 429:
             raise WearableError("Whoop rate limit reached - try again later")
         if response.status_code >= 400:

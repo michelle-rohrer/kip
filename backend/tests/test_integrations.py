@@ -12,7 +12,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import PrivacyConsent, Team, User, UserRole, WearableDaily, WearableProvider
+from app.models import (
+    PrivacyConsent,
+    Team,
+    User,
+    UserRole,
+    WearableConnection,
+    WearableDaily,
+    WearableProvider,
+)
 from app.routers import auth_router, integrations_router, training_router, wellness_router
 from app.services.auth import hash_password, reset_auth_state
 from app.services.crypto import decrypt_secret, encrypt_secret, hash_ingest_token
@@ -1447,3 +1455,115 @@ def test_whoop_distinguishes_a_missing_scope_from_a_dead_token(
     )
     with pytest.raises(WearableAuthError):
         whoop.fetch_daily(access_token="dead", start=date(2026, 11, 1), end=date(2026, 11, 3))
+
+
+def _connect_oura_with_cycle(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> WearableConnection:
+    from app.models import WearableConnection
+
+    connection = WearableConnection(
+        player_id=player["id"],
+        provider=WearableProvider.OURA,
+        access_token=encrypt_secret("token"),
+        sync_cycle=True,
+    )
+    db_session.add(connection)
+    db_session.commit()
+    db_session.refresh(connection)
+    return connection
+
+
+def test_a_provider_that_refuses_cycle_data_stops_being_offered(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Oura serves cycle data to some accounts and refuses it for others.
+
+    Once it has refused for this account, offering the switch is offering
+    something that cannot work - and leaving the consent on would keep a
+    permission alive for a category the provider will never deliver.
+    """
+    connection = _connect_oura_with_cycle(api_client, player, db_session)
+
+    def fake_get(url: str, **kwargs: Any) -> FakeResponse:
+        if url.endswith("/daily_cycle_phases"):
+            return FakeResponse({"detail": "forbidden"}, 403)
+        return FakeResponse({"data": []})
+
+    monkeypatch.setattr(oura.httpx, "get", fake_get)
+    wearables.sync_connection(db_session, connection)
+    db_session.refresh(connection)
+
+    assert connection.cycle_unavailable is True
+    assert connection.sync_cycle is False
+    # It is not reported as a problem - there is nothing for her to fix.
+    assert connection.last_error is None
+    assert connection.last_sync_status == "ok"
+
+    row = next(
+        r
+        for r in api_client.get("/api/integrations/", headers=player["headers"]).json()
+        if r["provider"] == "oura"
+    )
+    assert row["cycle_available"] is False
+    assert row["sync_cycle"] is False
+
+
+def test_switching_it_back_on_is_refused_with_a_reason(
+    api_client: TestClient,
+    player: dict[str, Any],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    connection = _connect_oura_with_cycle(api_client, player, db_session)
+    monkeypatch.setattr(
+        oura.httpx,
+        "get",
+        lambda url, **kwargs: (
+            FakeResponse({"detail": "forbidden"}, 403)
+            if url.endswith("/daily_cycle_phases")
+            else FakeResponse({"data": []})
+        ),
+    )
+    wearables.sync_connection(db_session, connection)
+
+    res = api_client.put(
+        "/api/integrations/oura/cycle-sync",
+        headers=player["headers"],
+        json={"enabled": True},
+    )
+    assert res.status_code == 409
+    assert "cycle data" in res.json()["detail"]
+
+
+def test_reconnecting_forgets_what_the_old_authorisation_could_not_do(
+    api_client: TestClient, player: dict[str, Any], db_session: Session
+) -> None:
+    """A new authorisation may carry different scopes or a changed plan."""
+    connection = _connect_oura_with_cycle(api_client, player, db_session)
+    connection.cycle_unavailable = True
+    db_session.commit()
+
+    wearables.store_tokens(
+        db_session,
+        player_id=player["id"],
+        provider=WearableProvider.OURA,
+        bundle=TokenBundle(access_token="fresh"),
+    )
+    db_session.refresh(connection)
+    assert connection.cycle_unavailable is False
+
+
+def test_a_provider_that_can_deliver_cycle_data_keeps_the_switch(
+    api_client: TestClient, player: dict[str, Any]
+) -> None:
+    api_client.post("/api/integrations/apple-health/token", headers=player["headers"])
+    row = next(
+        r
+        for r in api_client.get("/api/integrations/", headers=player["headers"]).json()
+        if r["provider"] == "apple_health"
+    )
+    assert row["cycle_available"] is True

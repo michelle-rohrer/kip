@@ -327,13 +327,19 @@ function ProviderCard({
 
       {status.connected && (
         <div className="mt-4 border-t border-line pt-4">
-          <Switch
-            label={t.cycleSyncLabel}
-            description={t.cycleSyncHint}
-            tone="bloom"
-            checked={status.sync_cycle}
-            onChange={(value) => onToggleCycleSync(status.provider, value)}
-          />
+          {status.cycle_available ? (
+            <Switch
+              label={t.cycleSyncLabel}
+              description={t.cycleSyncHint}
+              tone="bloom"
+              checked={status.sync_cycle}
+              onChange={(value) => onToggleCycleSync(status.provider, value)}
+            />
+          ) : (
+            /* The provider has refused cycle data for this account. Offering
+               the switch anyway would be offering something that cannot work. */
+            <p className="text-xs leading-snug text-subtle">{t.cycleNotFromThisDevice}</p>
+          )}
         </div>
       )}
 

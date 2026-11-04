@@ -304,6 +304,10 @@ class WearableConnection(Base):
     # device is off until the player turns it on - per provider, because she
     # may well trust one app with it and not another.
     sync_cycle: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Set once the provider has actually refused cycle data for this account.
+    # Learned, not assumed: Oura serves it to accounts that include Cycle
+    # Insights and refuses it for the rest, so the answer differs per player.
+    cycle_unavailable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_sync_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)

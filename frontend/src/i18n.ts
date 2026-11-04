@@ -313,13 +313,13 @@ export const TEXT = defineTranslations({
     appleTokenOnce: "Der Token wird nur jetzt angezeigt. Kopiere ihn, bevor du die Seite verlässt.",
     appleTokenHint: "Tippe auf «Einrichten», um deinen persönlichen Token zu erzeugen.",
     appleStep1:
-      "App «Kurzbefehle» öffnen, neuen Kurzbefehl anlegen und «Health-Sample abfragen» für Schlaf, HRV und Ruhepuls hinzufügen.",
+      "Am einfachsten: App «Health Auto Export» (App Store, einmalig ca. 4 Fr.) → Automations → Add Automation → Typ «REST API». URL und Token von oben eintragen, Methode POST, Format JSON, täglich. Fertig – die restlichen Schritte brauchst du dann nicht.",
     appleStep2:
-      "Aktion «Inhalte einer URL abrufen» ergänzen: Methode POST, die URL von oben, Header «X-Ingest-Token» mit dem Token.",
+      "Gratis-Variante: App «Kurzbefehle» öffnen, neuer Kurzbefehl. Pro Wert zwei Aktionen: «Health-Sample suchen» (Typ wählen, Zeitraum heute, Limit 1) und danach «Details von Health-Sample abrufen» → Wert. Ein Sample ist ein Objekt, nicht die Zahl – ohne den zweiten Schritt kommt nichts an.",
     appleStep3:
-      'Als JSON-Body senden, z. B. {"date":"2026-11-03","sleep_hours":7.5,"hrv_ms":54,"resting_hr":48}.',
+      "Einmal «Datum formatieren» mit dem aktuellen Datum und dem Format yyyy-MM-dd. Dann «Inhalte von URL abrufen»: Methode POST, URL von oben, Header «X-Ingest-Token» mit dem Token, Anfragetext JSON – und die Variablen aus Schritt 2 als Werte einsetzen (date, sleep_hours, hrv_ms, resting_hr).",
     appleStep4:
-      "Unter «Automation» täglich um 8 Uhr ausführen lassen. Alternativ die App «Health Auto Export» auf dieselbe URL zeigen lassen.",
+      "Unter «Automation» täglich morgens ausführen lassen, «Vor dem Ausführen fragen» aus. Tipp fürs Team: einmal bauen, per iCloud-Link teilen – dann muss jede nur noch ihren eigenen Token einsetzen.",
     suggestionTitle: "Werte von deinem Gerät",
     applySuggestion: "Übernehmen",
     suggestionApplied: "Gerätewerte übernommen.",
@@ -662,13 +662,13 @@ export const TEXT = defineTranslations({
     appleTokenOnce: "The token is shown only now. Copy it before you leave this page.",
     appleTokenHint: "Tap “Set up” to create your personal token.",
     appleStep1:
-      "Open the Shortcuts app, create a new shortcut and add “Find Health Samples” for sleep, HRV and resting heart rate.",
+      "Easiest route: the Health Auto Export app (App Store, around 4 francs once) → Automations → Add Automation → type “REST API”. Enter the URL and token from above, method POST, format JSON, daily. Done - you can skip the remaining steps.",
     appleStep2:
-      "Add “Get Contents of URL”: method POST, the URL above, header “X-Ingest-Token” with your token.",
+      "Free route: open Shortcuts, create a new shortcut. Two actions per value: “Find Health Samples” (pick the type, period today, limit 1) and then “Get Details of Health Sample” → Value. A sample is an object, not the number - without the second action nothing arrives.",
     appleStep3:
-      'Send it as a JSON body, e.g. {"date":"2026-11-03","sleep_hours":7.5,"hrv_ms":54,"resting_hr":48}.',
+      "Add “Format Date” once with the current date and the format yyyy-MM-dd. Then “Get Contents of URL”: method POST, the URL above, header “X-Ingest-Token” with your token, request body JSON - and insert the variables from step 2 as the values (date, sleep_hours, hrv_ms, resting_hr).",
     appleStep4:
-      "Under Automation, run it daily at 8am. Alternatively point the Health Auto Export app at the same URL.",
+      "Under Automation, run it every morning with “Ask Before Running” off. Team tip: build it once and share the iCloud link - everyone else only has to paste her own token.",
     suggestionTitle: "Values from your device",
     applySuggestion: "Use these",
     suggestionApplied: "Device values applied.",
@@ -1010,13 +1010,13 @@ export const TEXT = defineTranslations({
     appleTokenOnce: "Il token viene mostrato solo adesso. Copialo prima di lasciare la pagina.",
     appleTokenHint: "Tocca «Configura» per generare il tuo token personale.",
     appleStep1:
-      "Apri l'app Comandi rapidi, crea un nuovo comando e aggiungi «Trova campioni Salute» per sonno, HRV e FC a riposo.",
+      "Via più semplice: l'app «Health Auto Export» (App Store, circa 4 franchi una tantum) → Automations → Add Automation → tipo «REST API». Inserisci URL e token qui sopra, metodo POST, formato JSON, ogni giorno. Fatto: gli altri passaggi non servono.",
     appleStep2:
-      "Aggiungi «Ottieni contenuto dell'URL»: metodo POST, l'URL qui sopra, intestazione «X-Ingest-Token» con il token.",
+      "Via gratuita: apri Comandi rapidi, nuovo comando. Due azioni per ogni valore: «Trova campioni Salute» (scegli il tipo, periodo oggi, limite 1) e poi «Ottieni dettagli del campione» → Valore. Un campione è un oggetto, non il numero: senza la seconda azione non arriva nulla.",
     appleStep3:
-      'Invia come corpo JSON, ad es. {"date":"2026-11-03","sleep_hours":7.5,"hrv_ms":54,"resting_hr":48}.',
+      "Aggiungi una volta «Formatta data» con la data corrente e il formato yyyy-MM-dd. Poi «Ottieni contenuto dell'URL»: metodo POST, l'URL qui sopra, intestazione «X-Ingest-Token» con il token, corpo JSON, inserendo le variabili del passaggio 2 come valori (date, sleep_hours, hrv_ms, resting_hr).",
     appleStep4:
-      "In «Automazione» esegui ogni giorno alle 8. In alternativa punta l'app Health Auto Export allo stesso URL.",
+      "In «Automazione» esegui ogni mattina, con «Chiedi prima di eseguire» disattivato. Consiglio per la squadra: crealo una volta e condividi il link iCloud, così ognuna deve solo inserire il proprio token.",
     suggestionTitle: "Valori dal tuo dispositivo",
     applySuggestion: "Usa questi",
     suggestionApplied: "Valori del dispositivo applicati.",

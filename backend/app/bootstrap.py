@@ -14,6 +14,7 @@ is for, and it must never run against production.
 
 from __future__ import annotations
 
+import json
 import os
 
 from sqlalchemy import select
@@ -45,6 +46,94 @@ def ensure_teams(session: Session, names: list[str]) -> list[Team]:
     return created
 
 
+def _create_or_update_coach(
+    session: Session,
+    *,
+    username: str,
+    password: str,
+    name: str,
+    email: str | None,
+    team_name: str,
+    reset_password: bool,
+) -> str:
+    """Create one coach, or report why it was skipped. Idempotent."""
+    if not username or not password:
+        return f"coach '{username or '?'}': skipped (username or password missing)"
+    if len(password) < 8:
+        return f"coach '{username}': skipped (password must have at least 8 characters)"
+
+    if team_name:
+        team = session.execute(select(Team).where(Team.name == team_name)).scalar_one_or_none()
+    else:
+        team = session.execute(select(Team).order_by(Team.id.asc())).scalars().first()
+    if team is None:
+        return f"coach '{username}': skipped (team '{team_name or 'any'}' not found)"
+
+    coach = session.execute(select(User).where(User.username == username)).scalar_one_or_none()
+    if coach is not None:
+        if reset_password:
+            coach.password_hash = hash_password(password)
+            session.commit()
+            return f"coach '{username}': password reset"
+        return f"coach '{username}': already exists"
+
+    session.add(
+        User(
+            username=username,
+            email=email or None,
+            password_hash=hash_password(password),
+            role=UserRole.COACH,
+            team_id=team.id,
+            name=name or username,
+        )
+    )
+    session.commit()
+    return f"coach '{username}': created for team '{team.name}'"
+
+
+def ensure_additional_coaches(session: Session) -> list[str]:
+    """Coaches from ``BOOTSTRAP_COACHES``, a JSON list.
+
+    The single BOOTSTRAP_COACH_* variables only ever described one person, and
+    a team usually has more than one. JSON rather than a delimited string
+    because a password may contain any character a separator could claim.
+
+        [{"username": "denise", "password": "...", "name": "Denise Muster"}]
+
+    Each entry may carry "email" and "team"; without a team the entry joins
+    the same team as the main coach.
+    """
+    raw = os.getenv("BOOTSTRAP_COACHES", "").strip()
+    if not raw:
+        return []
+    try:
+        entries = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return [f"coaches: skipped (BOOTSTRAP_COACHES is not valid JSON: {exc})"]
+    if not isinstance(entries, list):
+        return ["coaches: skipped (BOOTSTRAP_COACHES must be a JSON list)"]
+
+    default_team = os.getenv("BOOTSTRAP_COACH_TEAM", "").strip()
+    reset = os.getenv("BOOTSTRAP_COACH_RESET_PASSWORD", "false").lower() == "true"
+    results: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            results.append("coach: skipped (entry is not an object)")
+            continue
+        results.append(
+            _create_or_update_coach(
+                session,
+                username=str(entry.get("username", "")).strip(),
+                password=str(entry.get("password", "")).strip(),
+                name=str(entry.get("name", "")).strip(),
+                email=(str(entry["email"]).strip() if entry.get("email") else None),
+                team_name=str(entry.get("team", default_team)).strip(),
+                reset_password=reset,
+            )
+        )
+    return results
+
+
 def ensure_coach(session: Session) -> str:
     username = os.getenv("BOOTSTRAP_COACH_USERNAME", "").strip()
     password = os.getenv("BOOTSTRAP_COACH_PASSWORD", "").strip()
@@ -54,33 +143,15 @@ def ensure_coach(session: Session) -> str:
         return "coach: skipped (BOOTSTRAP_COACH_PASSWORD must have at least 8 characters)"
 
     team_name = os.getenv("BOOTSTRAP_COACH_TEAM", "").strip()
-    if team_name:
-        team = session.execute(select(Team).where(Team.name == team_name)).scalar_one_or_none()
-    else:
-        team = session.execute(select(Team).order_by(Team.id.asc())).scalars().first()
-    if team is None:
-        return f"coach: skipped (team '{team_name or 'any'}' not found)"
-
-    coach = session.execute(select(User).where(User.username == username)).scalar_one_or_none()
-    if coach is not None:
-        if os.getenv("BOOTSTRAP_COACH_RESET_PASSWORD", "false").lower() == "true":
-            coach.password_hash = hash_password(password)
-            session.commit()
-            return f"coach: password reset for '{username}'"
-        return f"coach: '{username}' already exists"
-
-    session.add(
-        User(
-            username=username,
-            email=os.getenv("BOOTSTRAP_COACH_EMAIL") or None,
-            password_hash=hash_password(password),
-            role=UserRole.COACH,
-            team_id=team.id,
-            name=os.getenv("BOOTSTRAP_COACH_NAME", username),
-        )
+    return _create_or_update_coach(
+        session,
+        username=username,
+        password=password,
+        name=os.getenv("BOOTSTRAP_COACH_NAME", username),
+        email=os.getenv("BOOTSTRAP_COACH_EMAIL"),
+        team_name=team_name,
+        reset_password=os.getenv("BOOTSTRAP_COACH_RESET_PASSWORD", "false").lower() == "true",
     )
-    session.commit()
-    return f"coach: created '{username}' for team '{team.name}'"
 
 
 def apply_test_accounts(session: Session) -> str:
@@ -119,6 +190,8 @@ def bootstrap() -> None:
             )
         )
         print(ensure_coach(session))
+        for line in ensure_additional_coaches(session):
+            print(line)
         print(apply_test_accounts(session))
 
 

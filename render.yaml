@@ -83,6 +83,10 @@ services:
         sync: false
       - key: BOOTSTRAP_COACH_NAME
         sync: false
+      # Weitere Coaches als JSON-Liste, z. B.
+      # [{"username":"denise","password":"...","name":"Denise"}]
+      - key: BOOTSTRAP_COACHES
+        sync: false
       - key: BOOTSTRAP_TEAMS
         value: BTV Aarau F1
       # Testkonten: nutzen die App voll, bleiben aber aus Team-Uebersicht

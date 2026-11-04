@@ -143,6 +143,8 @@ export type IntegrationStatus = {
   supports_oauth: boolean;
   /** Cycle data is only taken from this provider once the player allows it. */
   sync_cycle: boolean;
+  /** False once the provider has refused cycle data for this account. */
+  cycle_available: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
   last_error: string | null;

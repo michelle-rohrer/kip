@@ -188,6 +188,9 @@ def store_tokens(
     if bundle.external_user_id:
         connection.external_user_id = bundle.external_user_id
     connection.last_error = None
+    # A new authorisation may carry different scopes or a changed plan, so what
+    # we learned about the old one no longer applies.
+    connection.cycle_unavailable = False
     connection.updated_at = _now()
     db.commit()
     db.refresh(connection)
@@ -376,8 +379,18 @@ def sync_connection(
     now = _now()
     connection.last_sync_at = now
     connection.last_sync_status = "ok"
-    # The pull worked, but a refused collection means data is quietly missing.
-    # Saying so beats leaving the player to wonder where her workouts went.
+
+    # Learning that this account cannot deliver cycle data is worth keeping:
+    # the app then stops offering a switch that leads nowhere. The consent is
+    # withdrawn with it, so no dormant permission is left lying around for the
+    # most sensitive category in the app.
+    if "daily_cycle_phases" in skipped:
+        connection.cycle_unavailable = True
+        connection.sync_cycle = False
+        skipped = [item for item in skipped if item != "daily_cycle_phases"]
+
+    # Any other refused collection means data is quietly missing. Saying so
+    # beats leaving the player to wonder where her workouts went.
     # Machine-readable on purpose: the app turns this into a sentence in her
     # own language instead of showing her a raw collection name.
     connection.last_error = f"unavailable:{','.join(sorted(skipped))}" if skipped else None
@@ -605,6 +618,14 @@ def set_sync_cycle(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"{provider.value} is not connected",
         )
+    if enabled and connection.cycle_unavailable:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{provider.value} has refused cycle data for this account - "
+                "switching this on would not deliver anything."
+            ),
+        )
     connection.sync_cycle = enabled
     connection.updated_at = _now()
     if not enabled:
@@ -646,6 +667,8 @@ def connection_status(db: Session, player: User) -> list[dict[str, Any]]:
                 "configured": is_configured(provider),
                 "supports_oauth": supports_oauth(provider),
                 "sync_cycle": bool(connection.sync_cycle) if connection else False,
+                # False only once the provider has actually refused it.
+                "cycle_available": not (connection.cycle_unavailable if connection else False),
                 "last_sync_at": _aware(connection.last_sync_at) if connection else None,
                 "last_sync_status": connection.last_sync_status if connection else None,
                 "last_error": connection.last_error if connection else None,

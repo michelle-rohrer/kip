@@ -367,6 +367,8 @@ export const TEXT = defineTranslations({
     derivedUseAuto: "Wieder berechnen lassen",
     derivedNotYet:
       "Wird berechnet, sobald du einmal deine Periode eingetragen hast – danach musst du nur noch ankreuzen, ob du sie hast.",
+    cycleNotFromThisDevice:
+      "Dieses Gerät liefert für dein Konto keine Zyklusdaten. Trag die Periode einfach unter «Zyklus» ein – Zyklustag und Phase rechnet die App daraus.",
     streakDay: "Tag in Folge",
   },
   en: {
@@ -714,6 +716,8 @@ export const TEXT = defineTranslations({
     derivedUseAuto: "Let it calculate again",
     derivedNotYet:
       "Calculated as soon as you have logged your period once - after that you only tick whether you have it.",
+    cycleNotFromThisDevice:
+      "This device does not provide cycle data for your account. Just log your period under Cycle - the app works out the day and phase from it.",
     streakDay: "day in a row",
   },
   it: {
@@ -1060,6 +1064,8 @@ export const TEXT = defineTranslations({
     derivedUseAuto: "Lascia ricalcolare",
     derivedNotYet:
       "Viene calcolato appena registri il ciclo una volta: dopo basta indicare se ce l'hai.",
+    cycleNotFromThisDevice:
+      "Questo dispositivo non fornisce dati del ciclo per il tuo account. Registra il ciclo nella sezione Ciclo: giorno e fase vengono calcolati da lì.",
     streakDay: "giorno di fila",
   },
 } as const);

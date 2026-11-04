@@ -12,6 +12,9 @@ class IntegrationStatus(BaseModel):
     supports_oauth: bool
     # Cycle data is only taken from a device once the player says so, per provider.
     sync_cycle: bool = False
+    # False once the provider has refused cycle data for this account - the app
+    # then stops offering the switch instead of letting it lead nowhere.
+    cycle_available: bool = True
     last_sync_at: datetime | None = None
     last_sync_status: str | None = None
     last_error: str | None = None

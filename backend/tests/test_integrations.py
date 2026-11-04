@@ -1567,3 +1567,55 @@ def test_a_provider_that_can_deliver_cycle_data_keeps_the_switch(
         if r["provider"] == "apple_health"
     )
     assert row["cycle_available"] is True
+
+
+def test_a_disabled_provider_is_not_offered(
+    api_client: TestClient, player: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ENABLED_WEARABLES", "whoop,oura")
+    rows = api_client.get("/api/integrations/", headers=player["headers"]).json()
+    assert {r["provider"] for r in rows} == {"whoop", "oura"}
+
+
+def test_a_disabled_provider_cannot_be_reached_by_url(
+    api_client: TestClient, player: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hiding a card is not enough - the route has to be closed too."""
+    monkeypatch.setenv("ENABLED_WEARABLES", "whoop,oura")
+    assert (
+        api_client.post(
+            "/api/integrations/apple-health/token", headers=player["headers"]
+        ).status_code
+        == 404
+    )
+    assert (
+        api_client.post(
+            "/api/integrations/apple-health/sync", headers=player["headers"]
+        ).status_code
+        == 404
+    )
+
+
+def test_a_disabled_provider_stops_accepting_pushed_data(
+    api_client: TestClient, player: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A phone already set up must not keep delivering after the switch-off."""
+    token = api_client.post(
+        "/api/integrations/apple-health/token", headers=player["headers"]
+    ).json()["ingest_token"]
+
+    monkeypatch.setenv("ENABLED_WEARABLES", "whoop,oura")
+    res = api_client.post(
+        "/api/integrations/apple-health/ingest",
+        headers={"X-Ingest-Token": token},
+        json={"date": date.today().isoformat(), "sleep_hours": 7.0},
+    )
+    assert res.status_code == 404
+
+
+def test_everything_is_offered_when_nothing_is_configured(
+    api_client: TestClient, player: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ENABLED_WEARABLES", raising=False)
+    rows = api_client.get("/api/integrations/", headers=player["headers"]).json()
+    assert {r["provider"] for r in rows} == {"whoop", "oura", "apple_health"}

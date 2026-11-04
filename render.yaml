@@ -44,7 +44,12 @@ services:
       - key: TRUSTED_HOSTS
         sync: false # z. B. volleysync-api.onrender.com
 
-      # --- Wearables (Whoop, Oura, Apple Health) ---
+      # --- Wearables ---
+      # Welche Anbieter die App anbietet. Apple Health ist absichtlich nicht
+      # dabei - die Einrichtung auf dem iPhone ist fuer ein Team zu aufwendig.
+      - key: ENABLED_WEARABLES
+        value: whoop,oura
+
       # API_BASE_URL baut die OAuth-Rueckkehr-URL und die Apple-Health-URL,
       # FRONTEND_BASE_URL ist die Seite, auf der die Spielerin danach landet.
       - key: API_BASE_URL

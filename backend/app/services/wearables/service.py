@@ -58,16 +58,23 @@ def _aware(value: datetime | None) -> datetime | None:
 # ------------------------------------------------------------------ helpers
 
 
-def parse_provider(value: str) -> WearableProvider:
-    """Accept both ``apple_health`` and the URL-friendly ``apple-health``."""
+def parse_provider(value: str, *, require_enabled: bool = True) -> WearableProvider:
+    """Accept both ``apple_health`` and the URL-friendly ``apple-health``.
+
+    A provider this deployment does not offer is treated like one that does
+    not exist, so a disabled route cannot be reached by typing its URL.
+    """
     normalised = value.strip().lower().replace("-", "_")
     try:
-        return WearableProvider(normalised)
+        provider = WearableProvider(normalised)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Unknown provider '{value}'",
         ) from exc
+    if require_enabled:
+        assert_enabled(provider)
+    return provider
 
 
 def api_base_url() -> str:
@@ -93,6 +100,32 @@ def redirect_uri(provider: WearableProvider) -> str:
 
 def ingest_url() -> str:
     return f"{api_base_url()}/api/integrations/apple-health/ingest"
+
+
+def enabled_providers() -> list[WearableProvider]:
+    """Which providers this deployment offers at all.
+
+    A product decision, not a technical one: a route that nobody on the team
+    can realistically follow is better left out than left standing. Driven by
+    configuration so it is one variable to change, not a rebuild.
+    """
+    configured = os.getenv("ENABLED_WEARABLES", "").strip()
+    if not configured:
+        return list(WearableProvider)
+    wanted = {name.strip().lower().replace("-", "_") for name in configured.split(",")}
+    return [provider for provider in WearableProvider if provider.value in wanted]
+
+
+def is_enabled(provider: WearableProvider) -> bool:
+    return provider in enabled_providers()
+
+
+def assert_enabled(provider: WearableProvider) -> None:
+    if not is_enabled(provider):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{provider.value} is not offered by this app",
+        )
 
 
 def is_configured(provider: WearableProvider) -> bool:
@@ -441,7 +474,13 @@ def sync_all(db: Session, *, days: int = DEFAULT_SYNC_DAYS) -> dict[str, int]:
     connections = (
         db.execute(
             select(WearableConnection).where(
-                WearableConnection.provider.in_([WearableProvider.WHOOP, WearableProvider.OURA])
+                WearableConnection.provider.in_(
+                    [
+                        provider
+                        for provider in enabled_providers()
+                        if provider in (WearableProvider.WHOOP, WearableProvider.OURA)
+                    ]
+                )
             )
         )
         .scalars()
@@ -649,7 +688,7 @@ def set_sync_cycle(
 def connection_status(db: Session, player: User) -> list[dict[str, Any]]:
     """One status row per provider, including the ones nobody connected yet."""
     rows = []
-    for provider in WearableProvider:
+    for provider in enabled_providers():
         connection = get_connection(db, player_id=player.id, provider=provider)
         last_day = db.execute(
             select(WearableDaily.date)

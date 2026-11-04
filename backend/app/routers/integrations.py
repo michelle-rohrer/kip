@@ -186,7 +186,8 @@ def connect_oura_personal_token(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.PLAYER)),
 ) -> dict[str, Any]:
-    """Connect Oura with a personal access token - no developer app needed."""
+    """Connect Oura with a personal access token - the retired fallback route."""
+    wearables.assert_enabled(WearableProvider.OURA)
     ip = request.client.host if request.client else "unknown"
     check_auth_rate_limit(action="oura-token", key=f"{ip}:{current_user.id}")
 
@@ -259,6 +260,7 @@ def create_apple_health_token(
     current_user: User = Depends(require_role(UserRole.PLAYER)),
 ) -> IngestTokenResponse:
     """Issue a fresh ingest token. Shown once - calling again invalidates it."""
+    wearables.assert_enabled(WearableProvider.APPLE_HEALTH)
     _, token = wearables.rotate_ingest_token(db, player_id=current_user.id)
     return IngestTokenResponse(ingest_token=token, ingest_url=wearables.ingest_url())
 
@@ -287,6 +289,7 @@ def ingest_apple_health(
             detail="Missing ingest token",
         )
 
+    wearables.assert_enabled(WearableProvider.APPLE_HEALTH)
     connection = wearables.resolve_ingest_token(db, supplied.strip())
     try:
         return _summary(wearables.ingest_apple_health(db, connection, payload))

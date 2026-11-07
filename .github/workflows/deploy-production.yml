@@ -10,15 +10,15 @@ jobs:
     name: Trigger production deploy
     runs-on: ubuntu-latest
     steps:
-      # Render deployt beide Services standardmaessig selbst (autoDeploy in render.yaml).
-      # Die Hooks sind nur noetig, wenn autoDeploy im Dashboard abgeschaltet wurde.
+      # Render deployt beide Services standardmässig selbst (autoDeploy in render.yaml).
+      # Die Hooks sind nur nötig, wenn autoDeploy im Dashboard abgeschaltet wurde.
       - name: Trigger backend production deploy
         env:
           HOOK_URL: ${{ secrets.PRODUCTION_BACKEND_DEPLOY_HOOK_URL }}
         run: |
           if [ -n "$HOOK_URL" ]; then
             curl -fsS -X POST "$HOOK_URL"
-            echo "Backend deploy hook ausgeloest."
+            echo "Backend deploy hook ausgelöst."
           else
             echo "Kein Backend-Hook gesetzt - Render deployt automatisch (autoDeploy)."
           fi
@@ -29,7 +29,7 @@ jobs:
         run: |
           if [ -n "$HOOK_URL" ]; then
             curl -fsS -X POST "$HOOK_URL"
-            echo "Frontend deploy hook ausgeloest."
+            echo "Frontend deploy hook ausgelöst."
           else
             echo "Kein Frontend-Hook gesetzt - Render deployt automatisch (autoDeploy)."
           fi

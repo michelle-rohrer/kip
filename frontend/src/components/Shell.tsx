@@ -4,6 +4,7 @@ import { AppTab, User } from "../types";
 import {
   IconChevronDown,
   IconGlobe,
+  IconKey,
   IconLogout,
   IconMoon,
   IconShield,
@@ -74,6 +75,7 @@ export function AppShell({
   onLogout,
   onOpenPrivacy,
   onOpenDevices,
+  onOpenAccount,
   offline,
   children,
   t,
@@ -89,6 +91,7 @@ export function AppShell({
   onLogout: () => void;
   onOpenPrivacy?: () => void;
   onOpenDevices?: () => void;
+  onOpenAccount?: () => void;
   offline: boolean;
   children: ReactNode;
   t: Record<string, string>;
@@ -209,6 +212,20 @@ export function AppShell({
                         >
                           <IconShield size={16} className="text-brand" />
                           {t.privacySettings}
+                        </button>
+                      )}
+
+                      {onOpenAccount && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            onOpenAccount();
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl border border-line bg-raised px-3 py-2.5 text-sm font-semibold text-ink"
+                        >
+                          <IconKey size={16} className="text-muted" />
+                          {t.accountSettings}
                         </button>
                       )}
 

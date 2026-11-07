@@ -218,6 +218,15 @@ export const IconSettings = (p: IconProps) => (
   </Base>
 );
 
+export const IconKey = (p: IconProps) => (
+  <Base {...p}>
+    <circle cx="8" cy="15" r="4" />
+    <path d="M10.9 12.1 20 3" />
+    <path d="M17 6l2.5 2.5" />
+    <path d="M14.5 8.5 17 11" />
+  </Base>
+);
+
 export const IconWatch = (p: IconProps) => (
   <Base {...p}>
     <rect x="6.5" y="6.5" width="11" height="11" rx="3" />

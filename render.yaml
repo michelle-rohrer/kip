@@ -1,13 +1,13 @@
-# Render Blueprint fuer VolleySync
+# Render Blueprint für VolleySync
 #
 # Legt zwei Services an:
 #   1. volleysync-api      -> FastAPI-Backend (Docker, Plan "starter" = immer wach)
 #   2. volleysync-app      -> React-Frontend als Static Site (gratis, OPTIONAL)
 #
 # Die Datenbank kommt von Neon (https://neon.tech, dauerhaft gratis).
-# Schritt-fuer-Schritt-Anleitung: docs/Deployment_Anleitung.md
+# Schritt-für-Schritt-Anleitung: docs/Deployment_Anleitung.md
 #
-# ACHTUNG - Frontend laeuft bereits auf Vercel:
+# ACHTUNG - Frontend läuft bereits auf Vercel:
 #   https://volleysync.vercel.app ist live und deployt selbst aus diesem Repo
 #   (Root-Verzeichnis "frontend"). Der Static-Site-Service unten ist deshalb
 #   nur eine Alternative - entweder Vercel ODER Render, nicht beides.
@@ -20,7 +20,7 @@
 #   einfach "volleysync".
 #
 # Werte mit "sync: false" fragt Render beim ersten Deploy im Dashboard ab bzw.
-# muessen dort einmalig gesetzt werden.
+# müssen dort einmalig gesetzt werden.
 
 services:
   - type: web
@@ -46,27 +46,27 @@ services:
 
       # --- Wearables ---
       # Welche Anbieter die App anbietet. Apple Health ist absichtlich nicht
-      # dabei - die Einrichtung auf dem iPhone ist fuer ein Team zu aufwendig.
+      # dabei - die Einrichtung auf dem iPhone ist für ein Team zu aufwendig.
       - key: ENABLED_WEARABLES
         value: whoop,oura
 
-      # API_BASE_URL baut die OAuth-Rueckkehr-URL und die Apple-Health-URL,
+      # API_BASE_URL baut die OAuth-Rückkehr-URL und die Apple-Health-URL,
       # FRONTEND_BASE_URL ist die Seite, auf der die Spielerin danach landet.
       - key: API_BASE_URL
         sync: false # z. B. https://volleysync-api.onrender.com
       - key: FRONTEND_BASE_URL
         sync: false # z. B. https://volleysync-app.onrender.com
-      # Verschluesselt die Whoop-/Oura-Tokens in der Datenbank.
-      # Render erzeugt den Wert einmalig - nie nachtraeglich aendern, sonst
-      # muessen alle Spielerinnen ihr Geraet neu verbinden.
+      # Verschlüsselt die Whoop-/Oura-Tokens in der Datenbank.
+      # Render erzeugt den Wert einmalig - nie nachträglich ändern, sonst
+      # müssen alle Spielerinnen ihr Gerät neu verbinden.
       - key: WEARABLE_ENCRYPTION_KEY
         generateValue: true
-      # Schuetzt /api/integrations/sync-all (optionaler naechtlicher Cron).
+      # Schützt /api/integrations/sync-all (optionaler nächtlicher Cron).
       - key: CRON_SECRET
         generateValue: true
-      # Optional: nur noetig fuer Whoop bzw. Oura-OAuth. Ohne diese Werte
-      # blendet die App den jeweiligen Knopf aus - Oura geht trotzdem ueber
-      # einen persoenlichen Token, Apple Health braucht hier gar nichts.
+      # Optional: nur nötig für Whoop bzw. Oura-OAuth. Ohne diese Werte
+      # blendet die App den jeweiligen Knopf aus - Oura geht trotzdem über
+      # einen persönlichen Token, Apple Health braucht hier gar nichts.
       - key: WHOOP_CLIENT_ID
         sync: false
       - key: WHOOP_CLIENT_SECRET
@@ -89,7 +89,7 @@ services:
         sync: false
       - key: BOOTSTRAP_TEAMS
         value: BTV Aarau F1
-      # Testkonten: nutzen die App voll, bleiben aber aus Team-Uebersicht
+      # Testkonten: nutzen die App voll, bleiben aber aus Team-Übersicht
       # und Modelltraining draussen.
       - key: BOOTSTRAP_TEST_PLAYERS
         value: testspielerin
@@ -117,7 +117,7 @@ services:
         value: "true"
 
   # OPTIONAL - nur anlegen, wenn das Frontend NICHT auf Vercel laufen soll.
-  # Laeuft es auf beiden, muessen beide Domains in CORS_ALLOW_ORIGINS stehen.
+  # Läuft es auf beiden, müssen beide Domains in CORS_ALLOW_ORIGINS stehen.
   - type: web
     name: volleysync-app
     runtime: static
@@ -136,7 +136,7 @@ services:
         source: /*
         destination: /index.html
     headers:
-      # Gehashte Build-Dateien duerfen ewig im Cache bleiben ...
+      # Gehashte Build-Dateien dürfen ewig im Cache bleiben ...
       - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable

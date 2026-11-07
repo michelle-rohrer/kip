@@ -247,3 +247,171 @@ def test_coach_account_cannot_be_deleted_through_the_app(
     )
     assert res.status_code == 403
     assert db_session.get(User, coach.id) is not None
+
+
+# ------------------------------------------------------------ password change
+
+
+def _register_and_login_full(client: TestClient, username: str) -> dict[str, str]:
+    """Register a player and return her whole token pair, not just the access token."""
+    created = client.post(
+        "/api/auth/register",
+        json={
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": "SuperSecret123",
+            "role": "player",
+            "name": "Password Player",
+        },
+    )
+    assert created.status_code == 201, created.text
+    tokens = client.post(
+        "/api/auth/login",
+        json={"username": username, "password": "SuperSecret123"},
+    )
+    assert tokens.status_code == 200, tokens.text
+    return tokens.json()
+
+
+def test_change_password_lets_the_player_sign_in_with_the_new_one(client: TestClient) -> None:
+    tokens = _register_and_login_full(client, "pw_change")
+
+    changed = client.post(
+        "/api/auth/password",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"current_password": "SuperSecret123", "new_password": "BrandNewPass456"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    old = client.post(
+        "/api/auth/login",
+        json={"username": "pw_change", "password": "SuperSecret123"},
+    )
+    assert old.status_code == 401
+
+    new = client.post(
+        "/api/auth/login",
+        json={"username": "pw_change", "password": "BrandNewPass456"},
+    )
+    assert new.status_code == 200, new.text
+
+
+def test_change_password_keeps_this_device_signed_in_and_drops_the_others(
+    client: TestClient,
+) -> None:
+    """The point of the new token pair in the response.
+
+    Changing a password revokes every refresh session. Without fresh tokens the
+    device that made the change would be the first one logged out - the exact
+    opposite of what she asked for.
+    """
+    first = _register_and_login_full(client, "pw_sessions")
+    second = client.post(
+        "/api/auth/login",
+        json={"username": "pw_sessions", "password": "SuperSecret123"},
+    ).json()
+
+    changed = client.post(
+        "/api/auth/password",
+        headers={"Authorization": f"Bearer {first['access_token']}"},
+        json={"current_password": "SuperSecret123", "new_password": "BrandNewPass456"},
+    )
+    assert changed.status_code == 200, changed.text
+    issued = changed.json()
+
+    # The other phone cannot renew its session any more ...
+    stale = client.post("/api/auth/refresh", json={"refresh_token": second["refresh_token"]})
+    assert stale.status_code == 401
+
+    # ... and neither can the refresh token this device started with.
+    replaced = client.post("/api/auth/refresh", json={"refresh_token": first["refresh_token"]})
+    assert replaced.status_code == 401
+
+    # But the pair handed back by the change still works.
+    alive = client.post("/api/auth/refresh", json={"refresh_token": issued["refresh_token"]})
+    assert alive.status_code == 200, alive.text
+    me = client.get(
+        "/api/auth/me",
+        headers={"Authorization": f"Bearer {issued['access_token']}"},
+    )
+    assert me.status_code == 200
+
+
+def test_change_password_rejects_a_wrong_current_password(client: TestClient) -> None:
+    tokens = _register_and_login_full(client, "pw_wrong")
+
+    refused = client.post(
+        "/api/auth/password",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"current_password": "NotMyPassword", "new_password": "BrandNewPass456"},
+    )
+    # 403 rather than 401 so the app keeps the session and shows the reason.
+    assert refused.status_code == 403
+
+    still_works = client.post(
+        "/api/auth/login",
+        json={"username": "pw_wrong", "password": "SuperSecret123"},
+    )
+    assert still_works.status_code == 200
+
+
+def test_change_password_rejects_reusing_the_current_password(client: TestClient) -> None:
+    tokens = _register_and_login_full(client, "pw_same")
+
+    refused = client.post(
+        "/api/auth/password",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"current_password": "SuperSecret123", "new_password": "SuperSecret123"},
+    )
+    assert refused.status_code == 400
+
+
+def test_change_password_enforces_the_minimum_length(client: TestClient) -> None:
+    tokens = _register_and_login_full(client, "pw_short")
+
+    refused = client.post(
+        "/api/auth/password",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        json={"current_password": "SuperSecret123", "new_password": "short"},
+    )
+    assert refused.status_code == 422
+
+
+def test_change_password_needs_authentication(client: TestClient) -> None:
+    res = client.post(
+        "/api/auth/password",
+        json={"current_password": "SuperSecret123", "new_password": "BrandNewPass456"},
+    )
+    assert res.status_code == 401
+
+
+def test_coach_can_change_her_own_password(client: TestClient, db_session: Session) -> None:
+    """Coaches are created from environment variables and never see that password
+    again - without this they would be stuck with whatever the server was given."""
+    coach = User(
+        username="coach_pw",
+        email="coach_pw@example.com",
+        password_hash=hash_password("SuperSecret123"),
+        role=UserRole.COACH,
+        name="Coach",
+    )
+    db_session.add(coach)
+    db_session.commit()
+
+    token = client.post(
+        "/api/auth/login",
+        json={"username": "coach_pw", "password": "SuperSecret123"},
+    ).json()["access_token"]
+
+    changed = client.post(
+        "/api/auth/password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "SuperSecret123", "new_password": "BrandNewPass456"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    signed_in = client.post(
+        "/api/auth/login",
+        json={"username": "coach_pw", "password": "BrandNewPass456"},
+    )
+    assert signed_in.status_code == 200

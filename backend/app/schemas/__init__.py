@@ -3,6 +3,7 @@
 from app.schemas.auth import (
     AccountDeleteRequest,
     MessageResponse,
+    PasswordChangeRequest,
     RefreshTokenRequest,
     TokenResponse,
     UserCreate,
@@ -15,6 +16,7 @@ from app.schemas.teams import TeamResponse
 __all__ = [
     "AccountDeleteRequest",
     "MessageResponse",
+    "PasswordChangeRequest",
     "RefreshTokenRequest",
     "TokenResponse",
     "UserCreate",

@@ -1,21 +1,90 @@
-Coach kann Spieler löschen
-Model vollständig trainieren
+OFFEN - braucht eine Entscheidung von dir
+=========================================
+
+Coach kann Spielerin löschen
+  Die Frage ist, was "löschen" heissen soll. Drei Varianten:
+  a) Aus dem Team nehmen: verschwindet aus deiner Übersicht und aus dem
+     Modelltraining, ihr Konto und ihre Daten bleiben ihr. Umkehrbar.
+  b) Konto und alle Daten löschen: dasselbe, was die Spielerin selbst über
+     "Konto löschen" auslösen kann. Nicht umkehrbar.
+  c) Beides, mit Rückfrage.
+  Empfehlung: (a). Gesundheitsdaten gehören der Spielerin, nicht dem Team -
+  sie kann ihr Konto bereits selbst löschen. Für "sie ist ausgetreten"
+  reicht (a), und ein versehentlicher Klick kostet dann keine Saison.
+
+Privacy regeln, damit du mit den Daten arbeiten darfst
+  Technisch steht die Freigabe pro Trainerin schon (Wellness / Zyklus
+  getrennt, Standard aus). Was fehlt, ist die Thesis-Nutzung: dafür braucht
+  es eine eigene, zusätzliche Einwilligung ("meine anonymisierten Daten
+  dürfen in die Auswertung"), getrennt von der Freigabe an die Trainerin.
+  Offen: Text der Einwilligung, und ob die Auswertung wirklich nur
+  anonymisiert läuft - dann darf sie auch nach Widerruf drin bleiben.
+
 Spiele hinzufügen
-in EInstellungen Passwort ändern
-alles zu ä,ü,ö ändern
-Privacy regeln, damit ich mit den Daten arbeiten darf
-klären was Seed Standard ist beim Registrieren
+  Ein Session-Typ "Spiel" im Trainingsformular war gebaut und wurde wieder
+  verworfen ("das braucht es nicht"). Offen, was stattdessen gemeint ist -
+  vermutlich eher eine eigene Tabelle mit Gegner, Datum und Resultat als
+  eine fünfte Schaltfläche im Trainingsformular.
+
 Streak zur Challenge ausbauen: Rangliste im Team (auf welchem Platz bin ich),
   Stufen/Tiers statt nur Tageszahl, damit es Spass macht
-  - offen: zaehlt Wellness allein oder alle Eintraege?
+  - offen: zählt Wellness allein oder alle Einträge?
   - offen: Rangliste mit Namen oder anonym (Platz 3 von 14) - Spielerinnen
-    sollen sich nicht blossgestellt fuehlen, nur weil sie zwei Tage ausliessen
-  - Freigabe noetig? Der Streak selbst ist kein Gesundheitswert, aber eine
-    Rangliste macht Teilnahme oeffentlich
-ERLEDIGT: Zyklus so geaendert, dass man nur noch die Periode eintraegt.
-  Zyklustag, Phase und Zykluslaenge werden berechnet (app/services/cycle.py),
-  aus eigenen Eintraegen und - wo freigegeben - aus Geraetedaten.
-  "Von Hand anpassen" bleibt fuer Faelle, in denen sie es besser weiss.
+    sollen sich nicht blossgestellt fühlen, nur weil sie zwei Tage ausliessen
+  - Freigabe nötig? Der Streak selbst ist kein Gesundheitswert, aber eine
+    Rangliste macht Teilnahme öffentlich
 
-OFFEN dazu: Oura liefert keine Zyklusdaten (Cycle Insights ist nicht in jedem
-  Konto). Wer Zyklusdaten vom Geraet will, braucht Apple Health.
+
+OFFEN - wartet auf Daten
+========================
+
+Modell vollständig trainieren
+  Läuft derzeit auf synthetischen Daten (ML_ALLOW_SYNTHETIC_BOOTSTRAP=true).
+  Umschalten geht erst, wenn genug echte Einträge da sind:
+  ML_MIN_REAL_ROWS=500 echte Spielerin-Tage und ML_MIN_POSITIVE_ROWS=20
+  davon mit Überlastungs-Label. Das Label kommt nicht nur aus Verletzungen,
+  sondern auch aus ACWR >= 1.35, Muskelkater >= 8 oder Stress >= 8 bei
+  wenig mentaler Energie (app/ml/labeling.py) - es entsteht also beim
+  normalen Eintragen. Bei 14 Spielerinnen sind 500 Zeilen gut fünf Wochen
+  tägliches Eintragen; vorher lohnt das Umschalten nicht.
+
+Oura liefert keine Zyklusdaten
+  Cycle Insights ist nicht in jedem Konto. Darum trägt die Spielerin ihre
+  Periode selbst ein; Zyklustag, Phase und Zykluslänge werden daraus
+  berechnet. Ein Gerät ist dafür nicht nötig.
+
+
+ERLEDIGT
+========
+
+Zyklus: man trägt nur noch die Periode ein. Zyklustag, Phase und
+  Zykluslänge werden berechnet (app/services/cycle.py), aus eigenen
+  Einträgen und - wo freigegeben - aus Gerätedaten. "Von Hand anpassen"
+  bleibt für Fälle, in denen sie es besser weiss.
+
+Passwort ändern in den Einstellungen
+  Menü -> "Konto". Gilt für Spielerinnen und Trainerinnen; Denise und Timo
+  können damit das generierte Passwort ersetzen. Andere Geräte werden
+  dabei abgemeldet, das eigene bleibt angemeldet.
+
+alles zu ä,ü,ö ändern
+  Betraf nicht die App - das Deutsch in der Oberfläche hatte längst
+  Umlaute. Es waren die Konfig- und Doku-Dateien (.env.example,
+  render.yaml, README.md, die beiden GitHub-Workflows), die noch
+  ae/oe/ue schrieben.
+
+klären was Seed Standard ist beim Registrieren
+  Geklärt, und es war ernster als gedacht. Der Seed-Befehl
+  (app/data_generation/seed.py) löscht als Erstes JEDEN Nutzer und jedes
+  Team - und hatte keinerlei Schutz gegen die Produktionsdatenbank. Drei
+  Dinge geändert:
+  1. Der Befehl weigert sich jetzt, wenn APP_ENV=production ist oder
+     DATABASE_URL auf Neon/Render/AWS/Supabase zeigt.
+  2. Die Seed-Trainerinnen hiessen "Timo" und "Denise" - die echten Namen -
+     mit festen Passwörtern im Repository. Heissen jetzt seed_coach_a/_b
+     mit Zufallspasswort pro Lauf.
+  3. Das zweite Seed-Team hiess "Eaglets NNV". Sobald es existierte, konnte
+     eine neue Spielerin bei der Registrierung das falsche Team wählen und
+     tauchte bei dir nie auf. Heisst jetzt "Seed Team B" - unverwechselbar.
+  Der Login-Hinweis "Seed-Coaches: Timo und Denise" ist weg; er zeigte auf
+  echte Personen statt auf Testdaten.

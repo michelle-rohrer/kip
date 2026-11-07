@@ -208,6 +208,37 @@ def logout_refresh_token(db: Session, refresh_token: str) -> None:
     db.commit()
 
 
+def change_password(db: Session, user: User, *, current_password: str, new_password: str) -> None:
+    """Set a new password and sign every session out, including this one.
+
+    Changing a password is how somebody reacts to a phone left in a changing
+    room, so every refresh session is revoked - a token that is still valid
+    afterwards would make the change pointless. The caller issues a fresh pair
+    for the device that made the change, so only the others are logged out.
+
+    The current password is re-checked for the same reason: otherwise a
+    borrowed access token could lock the owner out of her own account.
+    """
+    if not verify_password(current_password, user.password_hash):
+        # 403, not 401: the session is valid, the confirmation is wrong. The
+        # app reads 401 as "you have been signed out" and would bounce her to
+        # the login screen instead of saying what actually went wrong.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Current password is not correct"
+        )
+    if verify_password(new_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must differ from the current one",
+        )
+
+    user.password_hash = hash_password(new_password)
+    db.query(RefreshSession).filter(
+        RefreshSession.user_id == user.id, RefreshSession.revoked_at.is_(None)
+    ).update({RefreshSession.revoked_at: _now_utc()}, synchronize_session=False)
+    db.commit()
+
+
 def delete_account(db: Session, user: User, *, password: str) -> None:
     """Erase a player and everything she ever entered.
 

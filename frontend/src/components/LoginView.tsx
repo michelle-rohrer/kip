@@ -159,11 +159,10 @@ export function LoginView({
                   <Button type="submit" block loading={isLoading}>
                     {isLoading ? t.loggingIn : t.signIn}
                   </Button>
-                  {import.meta.env.DEV && (
-                    <p className="text-center text-xs text-subtle">
-                      {t.seedCoaches}: <code>Timo</code> {t.and} <code>Denise</code>
-                    </p>
-                  )}
+                  {/* No demo credentials here any more. The names used to be
+                      Timo and Denise, which are real coach accounts now - the
+                      hint pointed at people, not at test data. The seed prints
+                      its own logins when it runs. */}
                 </form>
               ) : (
                 <form className="space-y-4" onSubmit={onRegister}>

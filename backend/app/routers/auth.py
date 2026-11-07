@@ -7,6 +7,7 @@ from app.models import User, UserRole
 from app.schemas import (
     AccountDeleteRequest,
     MessageResponse,
+    PasswordChangeRequest,
     RefreshTokenRequest,
     TokenResponse,
     UserCreate,
@@ -15,6 +16,7 @@ from app.schemas import (
 )
 from app.services.auth import (
     authenticate_user,
+    change_password,
     delete_account,
     issue_tokens,
     logout_refresh_token,
@@ -62,6 +64,34 @@ def logout(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> Messa
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> User:
     return current_user
+
+
+@router.post("/password", response_model=TokenResponse)
+def change_own_password(
+    payload: PasswordChangeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> TokenResponse:
+    """Change the signed-in user's password.
+
+    Returns a fresh token pair: the change revokes every refresh session, so
+    without new tokens the device that just changed the password would be the
+    first one thrown out.
+
+    Rate limited like a login - the body carries the current password, so
+    repeated calls would otherwise be a way to test guesses.
+    """
+    ip = request.client.host if request.client else "unknown"
+    check_auth_rate_limit(action="change-password", key=f"{ip}:{current_user.username}")
+    change_password(
+        db,
+        current_user,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
+    access_token, refresh_token = issue_tokens(db, current_user)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

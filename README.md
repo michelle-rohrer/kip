@@ -2,8 +2,8 @@
 
 Track smart. Play strong.
 
-VolleySync ist ein Full-Stack-Projekt fuer zyklusbewusste Belastungssteuerung im Volleyball.  
-Spielerinnen erfassen Wellness-, Zyklus-, Trainings- und Verletzungsdaten. Trainerinnen erhalten eine priorisierte Team-Uebersicht mit Risiko-Signalen.
+VolleySync ist ein Full-Stack-Projekt für zyklusbewusste Belastungssteuerung im Volleyball.  
+Spielerinnen erfassen Wellness-, Zyklus-, Trainings- und Verletzungsdaten. Trainerinnen erhalten eine priorisierte Team-Übersicht mit Risiko-Signalen.
 
 Schlaf, HRV, Ruhepuls und Erholung muss niemand von Hand eintippen: Whoop, Oura und
 Apple Health lassen sich direkt verbinden (`docs/Wearables_Anleitung.md`).
@@ -13,7 +13,7 @@ Apple Health lassen sich direkt verbinden (`docs/Wearables_Anleitung.md`).
 - Backend: FastAPI, SQLAlchemy, Alembic, scikit-learn
 - Frontend: React, Vite, TypeScript, Tailwind (installierbare PWA, Hell-/Dunkelmodus, DE/EN/IT)
 - Datenbank: PostgreSQL
-- Wearables: Whoop (OAuth), Oura (OAuth oder persoenlicher Token), Apple Health (Push vom iPhone)
+- Wearables: Whoop (OAuth), Oura (OAuth oder persönlicher Token), Apple Health (Push vom iPhone)
 - Orchestrierung: Docker Compose
 - CI/CD: GitHub Actions (CI, Staging Deploy, Production Deploy)
 - Hosting: Render (Backend + Static Site) und Neon (Postgres) -> `render.yaml`
@@ -32,19 +32,21 @@ laufen beim Start automatisch (`backend/start.sh`).
 1. `.env.example` nach `.env` kopieren und Werte anpassen.
 2. Services starten:
    - `docker compose up --build`
-3. API pruefen:
+3. API prüfen:
    - `http://localhost:8000/health`
-4. Frontend oeffnen:
+4. Frontend öffnen:
    - `http://localhost:5173`
 
 ## Wichtige Befehle
 
 - DB-Migrationen anwenden:
   - `cd backend && alembic upgrade head`
-- Teams und Coach-Konto anlegen (idempotent, laeuft in Produktion automatisch):
+- Teams und Coach-Konto anlegen (idempotent, läuft in Produktion automatisch):
   - `cd backend && python -m app.bootstrap`
-- Synthetische Daten seeden (nur lokal/Test - loescht alle Daten!):
+- Synthetische Daten seeden (nur lokal/Test - löscht alle Daten!):
   - `cd backend && python -m app.data_generation.seed`
+  - Gegen eine gehostete Datenbank oder mit `APP_ENV=production` bricht der
+    Befehl ab. Die Demo-Logins stehen danach im Terminal.
 - Modell manuell trainieren:
   - `cd backend && python -m app.ml.retrain`
 - Voller Backend-Testlauf:
@@ -52,7 +54,7 @@ laufen beim Start automatisch (`backend/start.sh`).
 
 ## ML-Workflow (Bootstrap zu Echtdaten)
 
-Die Pipeline ist fuer den Uebergang von wenig Daten zu echten Teamdaten vorbereitet:
+Die Pipeline ist für den Übergang von wenig Daten zu echten Teamdaten vorbereitet:
 
 - `bootstrap_mixed`: Training mit real + synthetic, falls noch zu wenig reale Daten vorhanden sind.
 - `real_only`: automatische Umschaltung, sobald genug reale Daten und positive Labels vorhanden sind.
@@ -79,7 +81,7 @@ kip/
 │   │   ├── routers/
 │   │   ├── services/
 │   │   │   ├── wearables/    # Whoop, Oura, Apple Health + Sync
-│   │   │   └── crypto.py     # Verschluesselung der Geraete-Tokens
+│   │   │   └── crypto.py     # Verschlüsselung der Geräte-Tokens
 │   │   ├── models/
 │   │   ├── ml/
 │   │   └── bootstrap.py      # Teams + Coach-Konto beim Start
@@ -101,13 +103,13 @@ kip/
 
 ## Doku
 
-- Gesamtuebersicht + Vorgehen: `docs/Projektdokumentation_Gesamt.md`
-- Deployment (oeffentlich stellen): `docs/Deployment_Anleitung.md`
+- Gesamtübersicht + Vorgehen: `docs/Projektdokumentation_Gesamt.md`
+- Deployment (öffentlich stellen): `docs/Deployment_Anleitung.md`
 - Whoop / Oura / Apple Health verbinden: `docs/Wearables_Anleitung.md`
 - Live-Update Anleitung (Staging/Production): `docs/Live_Update_Anleitung.md`
 - Historische Phasen-Dokumentation: `docs/Phase_1_Dokumentation.md` bis `docs/Phase_9_Dokumentation.md`
 
-## Qualitaetssicherung
+## Qualitätssicherung
 
 Backend:
 
@@ -123,13 +125,19 @@ Frontend:
 
 ## Security-Hinweise
 
-- Passwoerter werden mit `bcrypt` gehasht.
+- Passwörter werden mit `bcrypt` gehasht.
 - In Produktion ist ein sicherer `JWT_SECRET_KEY` Pflicht (mind. 32 Zeichen).
 - Auth-Endpoints sind serverseitig rate-limited.
 - Refresh-Tokens liegen in der Datenbank (`refresh_sessions`), werden bei jeder
-  Nutzung rotiert und ueberleben einen Deploy - Logout wirkt sofort.
-- `app.data_generation.seed` darf nie in Produktion laufen: der Befehl loescht alle
-  Daten und legt Testkonten mit Passwoertern an, die im Repository stehen.
+  Nutzung rotiert und überleben einen Deploy - Logout wirkt sofort.
+- `app.data_generation.seed` darf nie in Produktion laufen: der Befehl löscht als
+  Erstes jeden Nutzer und jedes Team. Er weigert sich inzwischen selbst, wenn
+  `APP_ENV=production` ist oder `DATABASE_URL` auf eine gehostete Datenbank zeigt
+  (Neon, Render, AWS, Supabase) - vorbei kommt nur, wer `--yes-delete-every-account`
+  ausschreibt.
+- Die Seed-Konten heissen `seed_coach_a` / `seed_coach_b` und bekommen bei jedem
+  Lauf ein neues Zufallspasswort, das der Befehl ausgibt. Früher standen hier die
+  Vornamen der echten Trainerinnen samt festem Passwort im Repository.
 
 ## Release-Flow (Kurz)
 

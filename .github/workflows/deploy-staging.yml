@@ -11,16 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Staging ist optional: nur aktiv, wenn die Deploy-Hooks als GitHub Secrets
-      # hinterlegt sind. Ohne Hooks laeuft der Job einfach durch.
+      # hinterlegt sind. Ohne Hooks läuft der Job einfach durch.
       - name: Trigger backend staging deploy
         env:
           HOOK_URL: ${{ secrets.STAGING_BACKEND_DEPLOY_HOOK_URL }}
         run: |
           if [ -n "$HOOK_URL" ]; then
             curl -fsS -X POST "$HOOK_URL"
-            echo "Backend staging deploy ausgeloest."
+            echo "Backend staging deploy ausgelöst."
           else
-            echo "Kein Staging-Backend-Hook gesetzt - uebersprungen."
+            echo "Kein Staging-Backend-Hook gesetzt - übersprungen."
           fi
 
       - name: Trigger frontend staging deploy
@@ -29,7 +29,7 @@ jobs:
         run: |
           if [ -n "$HOOK_URL" ]; then
             curl -fsS -X POST "$HOOK_URL"
-            echo "Frontend staging deploy ausgeloest."
+            echo "Frontend staging deploy ausgelöst."
           else
-            echo "Kein Staging-Frontend-Hook gesetzt - uebersprungen."
+            echo "Kein Staging-Frontend-Hook gesetzt - übersprungen."
           fi

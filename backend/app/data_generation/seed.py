@@ -1,8 +1,15 @@
-"""Load synthetic data into the database: ``python -m app.data_generation.seed`` (from ``backend/``)."""
+"""Load synthetic data into the database: ``python -m app.data_generation.seed`` (from ``backend/``).
+
+Never point this at the production database. It starts by deleting every user
+and every team, so one mistyped ``DATABASE_URL`` costs a season of real
+wellness, cycle, training and injury entries. ``_refuse_in_production`` is the
+seatbelt; the only way past it is to say out loud what it does.
+"""
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from dataclasses import replace
 from datetime import date
@@ -27,6 +34,38 @@ from app.models import (
     User,
     WellnessEntry,
 )
+
+OVERRIDE_FLAG = "--yes-delete-every-account"
+
+
+def _refuse_in_production(*, override: bool) -> str | None:
+    """Return a refusal message when this must not run here, else ``None``.
+
+    Two independent signals, because either one alone can be wrong: a local
+    ``.env`` copied from the server says ``production`` without any real data
+    behind it, and a hand-exported production ``DATABASE_URL`` says nothing at
+    all about ``APP_ENV``.
+    """
+    if override:
+        return None
+
+    reasons: list[str] = []
+    if os.getenv("APP_ENV", "development").strip().lower() == "production":
+        reasons.append("APP_ENV is 'production'")
+
+    database_url = os.getenv("DATABASE_URL", "")
+    remote_hosts = ("neon.tech", "render.com", "amazonaws.com", "supabase.co")
+    if any(host in database_url for host in remote_hosts):
+        reasons.append("DATABASE_URL points at a hosted database")
+
+    if not reasons:
+        return None
+    return (
+        "Refusing to seed: "
+        + " and ".join(reasons)
+        + ".\nThis deletes EVERY user and team in that database first.\n"
+        + f"If you really mean it, run it again with {OVERRIDE_FLAG}."
+    )
 
 
 def _reset_all_application_data(session: Session) -> None:
@@ -103,7 +142,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Last day of history (YYYY-MM-DD). Default: today.",
     )
+    parser.add_argument(
+        OVERRIDE_FLAG,
+        action="store_true",
+        help="Seed even though this looks like production. Deletes every account first.",
+    )
     args = parser.parse_args(argv)
+
+    refusal = _refuse_in_production(override=args.yes_delete_every_account)
+    if refusal:
+        print(refusal, file=sys.stderr)
+        return 2
 
     cfg = SyntheticDatasetConfig()
     if args.seed is not None:
@@ -124,7 +173,14 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         db.close()
 
+    # The passwords are drawn fresh on every run and exist nowhere else, so
+    # this is the only moment they can be read. Printed rather than stored:
+    # a demo login belongs in a terminal, not in a file somebody commits.
     print("Synthetic data seeded successfully.")
+    print("Demo logins (new on every seed run):")
+    for username, password in zip(cfg.coach_usernames, cfg.coach_passwords):
+        print(f"  coach  {username}: {password}")
+    print(f"  players player.01 ... player.{cfg.num_players:02d}: {cfg.player_password}")
     return 0
 
 

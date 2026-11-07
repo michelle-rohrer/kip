@@ -21,6 +21,7 @@ import {
   PrivacyConsent,
   SyncResult,
   TeamOption,
+  TokenResponse,
   TrainingEntry,
   User,
   WearableDaily,
@@ -46,6 +47,7 @@ import {
   WellnessView,
 } from "./components/PlayerViews";
 import { IntegrationsView } from "./components/IntegrationsView";
+import { AccountView, type PasswordChange } from "./components/AccountView";
 import {
   IconDrop,
   IconDumbbell,
@@ -131,6 +133,7 @@ function App() {
   const [appleToken, setAppleToken] = useState<AppleHealthToken | null>(null);
   const [busyProvider, setBusyProvider] = useState<WearableProvider | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [wellnessForm, setWellnessForm] = useState<WellnessForm>({
     date: todayIso(),
@@ -862,6 +865,31 @@ function App() {
     }
   }
 
+  async function handleChangePassword(change: PasswordChange) {
+    setIsChangingPassword(true);
+    try {
+      // The change revokes every refresh session, this one included. The
+      // response carries a fresh pair so the device that just changed the
+      // password is not the first one thrown out - storing it is not optional.
+      const tokens = await apiRequest<TokenResponse>("/api/auth/password", {
+        method: "POST",
+        body: JSON.stringify(change),
+      });
+      setTokens(tokens);
+      pushToast(t.passwordChanged, "success");
+    } catch (error) {
+      const message =
+        error instanceof ApiError && error.status === 403
+          ? t.passwordWrongCurrent
+          : error instanceof ApiError && error.status === 400
+            ? t.passwordSameAsOld
+            : describeError(error, t.passwordChangeFailed);
+      pushToast(message, "error");
+    } finally {
+      setIsChangingPassword(false);
+    }
+  }
+
   function handleApplyWellnessSuggestion() {
     const values = suggestion?.wellness;
     if (!values) return;
@@ -1001,6 +1029,7 @@ function App() {
         onLogout={() => void handleLogout()}
         onOpenPrivacy={user.role === "player" ? () => setTab("privacy") : undefined}
         onOpenDevices={user.role === "player" ? () => setTab("devices") : undefined}
+        onOpenAccount={() => setTab("account")}
         offline={offline}
         t={t}
       >
@@ -1111,6 +1140,14 @@ function App() {
             onSave={(consent) => void handlePrivacySave(consent)}
             isDeleting={isDeletingAccount}
             onDeleteAccount={(password) => void handleDeleteAccount(password)}
+          />
+        )}
+
+        {tab === "account" && (
+          <AccountView
+            t={t}
+            isSaving={isChangingPassword}
+            onChangePassword={(change) => void handleChangePassword(change)}
           />
         )}
 

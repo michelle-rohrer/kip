@@ -227,4 +227,6 @@ export type PlayerTab =
   | "privacy"
   | "devices";
 export type CoachTab = "team" | "detail";
-export type AppTab = PlayerTab | CoachTab;
+/** Reachable from the menu by both roles, so it sits outside the two lists. */
+export type SharedTab = "account";
+export type AppTab = PlayerTab | CoachTab | SharedTab;

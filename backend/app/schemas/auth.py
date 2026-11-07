@@ -61,5 +61,17 @@ class AccountDeleteRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class PasswordChangeRequest(BaseModel):
+    """Change the signed-in user's password.
+
+    The current password is part of the body on purpose: an access token lying
+    around on an unlocked phone should not be enough to lock the owner out of
+    her own account.
+    """
+
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class MessageResponse(BaseModel):
     detail: str

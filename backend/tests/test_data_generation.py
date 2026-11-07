@@ -1,6 +1,7 @@
 from datetime import date
 
 import numpy as np
+import pytest
 from sqlalchemy import func, select
 
 from app.data_generation.generate import SyntheticDatasetConfig, build_synthetic_dataset
@@ -45,3 +46,96 @@ def test_seed_database_persists_and_replace_clears_previous(db_session):
     seed_database(session=db_session, config=cfg, replace=True, end_date=date(2026, 2, 1))
     assert db_session.scalar(select(func.count()).select_from(User)) == 17
     assert db_session.scalar(select(func.count()).select_from(InjuryEntry)) >= 0
+
+
+# ------------------------------------------------- guarding the seed command
+
+
+def test_seed_refuses_when_app_env_is_production(monkeypatch):
+    """The seed deletes every user and team before it writes anything.
+
+    Against the production database that is a season of real wellness, cycle,
+    training and injury entries, so it has to say no by default.
+    """
+    from app.data_generation.seed import _refuse_in_production
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg2://local/calm")
+
+    refusal = _refuse_in_production(override=False)
+    assert refusal is not None
+    assert "APP_ENV" in refusal
+
+
+def test_seed_refuses_when_the_database_is_hosted(monkeypatch):
+    """A production connection string exported by hand carries no APP_ENV."""
+    from app.data_generation.seed import _refuse_in_production
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pw@ep-x.eu-central-1.aws.neon.tech/db")
+
+    refusal = _refuse_in_production(override=False)
+    assert refusal is not None
+    assert "hosted database" in refusal
+
+
+def test_seed_allows_a_local_development_database(monkeypatch):
+    from app.data_generation.seed import _refuse_in_production
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg2://calm:calm@db:5432/calm")
+
+    assert _refuse_in_production(override=False) is None
+
+
+def test_seed_override_gets_through(monkeypatch):
+    from app.data_generation.seed import _refuse_in_production
+
+    monkeypatch.setenv("APP_ENV", "production")
+    assert _refuse_in_production(override=True) is None
+
+
+def test_seed_cli_exits_without_touching_a_production_database(monkeypatch):
+    """End to end: the CLI returns non-zero and never opens a session."""
+    from app.data_generation import seed as seed_module
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setattr(
+        seed_module,
+        "SessionLocal",
+        lambda: pytest.fail("the seed opened a database session in production"),
+    )
+
+    assert seed_module.main([]) == 2
+
+
+def test_synthetic_passwords_are_not_hardcoded():
+    """No synthetic credential may be readable from the repository.
+
+    The seed used to ship the real coaches' first names together with fixed
+    passwords, so anyone with the repo could sign in as a coach anywhere those
+    accounts existed.
+    """
+    first = SyntheticDatasetConfig()
+    second = SyntheticDatasetConfig()
+
+    assert first.coach_passwords != second.coach_passwords
+    assert first.player_password != second.player_password
+    assert all(len(password) >= 12 for password in first.coach_passwords)
+
+
+def test_synthetic_accounts_cannot_be_mistaken_for_real_ones():
+    """Seed names stay unmistakably synthetic.
+
+    'Timo' and 'Denise' are the real coaches. While the seed used those names,
+    a seeded account could quietly stand in for a real one - and bootstrap
+    would skip creating the real coach because the username already existed.
+    """
+    cfg = SyntheticDatasetConfig()
+    real_names = {"timo", "denise"}
+
+    assert not real_names & {name.lower() for name in cfg.coach_usernames}
+    assert not real_names & {name.lower() for name in cfg.coach_names}
+    # And no seed team may collide with the real squad: a second team breaks
+    # registration, because players then pick a squad their coach cannot see.
+    assert "btv aarau f1" not in {name.lower() for name in cfg.team_names}

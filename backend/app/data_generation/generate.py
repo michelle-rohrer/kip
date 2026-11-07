@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from uuid import uuid4
 
@@ -21,6 +22,20 @@ from app.models import (
     WellnessEntry,
 )
 from app.services.auth import hash_password
+
+
+def random_password() -> str:
+    """A throwaway password for a synthetic account.
+
+    Deliberately not derived from ``random_seed``: the rest of the dataset is
+    reproducible on purpose, a login credential must not be.
+    """
+    return secrets.token_urlsafe(12)
+
+
+def _random_coach_passwords() -> tuple[str, str]:
+    return (random_password(), random_password())
+
 
 BODY_LOCATIONS = (
     "Knie",
@@ -67,11 +82,19 @@ class SyntheticDatasetConfig:
     num_players: int = 18
     days_min: int = 90
     days_max: int = 180
-    team_names: tuple[str, str] = ("BTV Aarau F1", "Eaglets NNV")
-    coach_usernames: tuple[str, str] = ("Timo", "Denise")
-    coach_names: tuple[str, str] = ("Timo", "Denise")
-    coach_passwords: tuple[str, str] = ("Killerlippi610", "cazzo!")
-    player_password: str = "synthetic-seed-password"
+    # Every name here has to be unmistakably synthetic. The seed used to carry
+    # the real team and the real coaches' first names, which made two problems
+    # invisible: a seeded account silently stood in for a real one with a
+    # password that was sitting in this repository, and the second team broke
+    # registration - a player would pick the wrong squad from the dropdown and
+    # never appear in her coach's overview.
+    team_names: tuple[str, str] = ("Seed Team A", "Seed Team B")
+    coach_usernames: tuple[str, str] = ("seed_coach_a", "seed_coach_b")
+    coach_names: tuple[str, str] = ("Seed Coach A", "Seed Coach B")
+    # No password in source control. A fresh random one per run, printed by the
+    # seed CLI - demo accounts nobody can log into straight from the repository.
+    coach_passwords: tuple[str, str] = field(default_factory=_random_coach_passwords)
+    player_password: str = field(default_factory=random_password)
     random_seed: int | None = 42
 
 

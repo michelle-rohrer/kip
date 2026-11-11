@@ -11,12 +11,18 @@ const REFRESH_TOKEN_KEY = "kip_refresh_token";
 export class ApiError extends Error {
   status: number;
   isNetwork: boolean;
+  /** Which input the server rejected ("username", "email", ...), when it said. */
+  field?: string;
 
-  constructor(message: string, options: { status?: number; isNetwork?: boolean } = {}) {
+  constructor(
+    message: string,
+    options: { status?: number; isNetwork?: boolean; field?: string } = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = options.status ?? 0;
     this.isNetwork = options.isNetwork ?? false;
+    this.field = options.field;
   }
 }
 
@@ -101,17 +107,25 @@ async function rawRequest<T>(path: string, init: RequestInit, token?: string | n
   if (!response.ok) {
     const text = await response.text();
     let detail = text || `HTTP ${response.status}`;
+    let field: string | undefined;
     try {
-      const parsed = JSON.parse(text) as { detail?: string | { msg?: string }[] };
+      const parsed = JSON.parse(text) as {
+        detail?: string | { msg?: string; loc?: (string | number)[] }[];
+      };
       if (typeof parsed.detail === "string") {
         detail = parsed.detail;
-      } else if (Array.isArray(parsed.detail) && parsed.detail[0]?.msg) {
-        detail = parsed.detail[0].msg as string;
+      } else if (Array.isArray(parsed.detail) && parsed.detail[0]) {
+        const first = parsed.detail[0];
+        detail = first.msg ?? detail;
+        // FastAPI's loc is ["body", "username"]; the last entry names the input.
+        // Without it the app could only repeat the raw regex at the player.
+        const last = first.loc?.[first.loc.length - 1];
+        if (typeof last === "string" && last !== "body") field = last;
       }
     } catch {
       /* body was not JSON - keep the raw text */
     }
-    throw new ApiError(detail, { status: response.status });
+    throw new ApiError(detail, { status: response.status, field });
   }
 
   if (response.status === 204) {

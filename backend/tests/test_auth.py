@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -415,3 +416,111 @@ def test_coach_can_change_her_own_password(client: TestClient, db_session: Sessi
         json={"username": "coach_pw", "password": "BrandNewPass456"},
     )
     assert signed_in.status_code == 200
+
+
+# ------------------------------------------------- what registration accepts
+
+
+def test_registration_accepts_a_one_character_username(client: TestClient) -> None:
+    """Short usernames are fine - this is a 14-person team, not a public sign-up.
+
+    A player typed "lu" and got back the raw regex. The minimum is 1 now.
+    """
+    created = client.post(
+        "/api/auth/register",
+        json={
+            "username": "l",
+            "email": "l@example.com",
+            "password": "SuperSecret123",
+            "role": "player",
+            "name": "Luana Petris",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    signed_in = client.post("/api/auth/login", json={"username": "l", "password": "SuperSecret123"})
+    assert signed_in.status_code == 200
+
+
+def test_registration_treats_an_empty_email_as_not_given(client: TestClient) -> None:
+    """The schema calls email optional, so "" must not be a pattern error.
+
+    The form sends "" for an untouched field; the API used to answer with the
+    email regex, naming a box the player had deliberately left alone.
+    """
+    created = client.post(
+        "/api/auth/register",
+        json={
+            "username": "no.email",
+            "email": "",
+            "password": "SuperSecret123",
+            "role": "player",
+            "name": "No Email",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["email"] is None
+
+
+def test_registration_still_rejects_a_username_with_a_space(client: TestClient) -> None:
+    """Relaxing the length must not quietly relax the character set too."""
+    refused = client.post(
+        "/api/auth/register",
+        json={
+            "username": "Luana Petris",
+            "email": "luana@example.com",
+            "password": "SuperSecret123",
+            "role": "player",
+            "name": "Luana Petris",
+        },
+    )
+    assert refused.status_code == 422
+    # The app turns loc into a readable sentence, so it has to stay present.
+    assert refused.json()["detail"][0]["loc"][-1] == "username"
+
+
+def test_registration_rejects_an_email_without_a_domain_dot(client: TestClient) -> None:
+    """Browsers pass "luana@gmx" for type=email; the API must still name the field."""
+    refused = client.post(
+        "/api/auth/register",
+        json={
+            "username": "luana.gmx",
+            "email": "luana@gmx",
+            "password": "SuperSecret123",
+            "role": "player",
+            "name": "Luana Petris",
+        },
+    )
+    assert refused.status_code == 422
+    assert refused.json()["detail"][0]["loc"][-1] == "email"
+
+
+# --------------------------------------- keeping the two pattern copies in step
+
+
+def test_username_pattern_survives_browser_compilation() -> None:
+    """The frontend puts this same string into an input's ``pattern`` attribute.
+
+    A browser compiles that as ``^(?:<pattern>)$`` with the ``v`` flag, where a
+    bare ``-`` at the end of a character class is a syntax error - and a pattern
+    that fails to compile is dropped in silence. The field then accepts
+    everything while looking guarded, which is how "Test Person" reached the API
+    and came back as a raw regex in a player's face.
+
+    So the dash has to stay escaped. This test fails loudly if anyone tidies it
+    away, because the browser never will.
+    """
+    from app.schemas.auth import EMAIL_PATTERN, USERNAME_PATTERN
+
+    assert r"\-" in USERNAME_PATTERN, "the dash must stay escaped for the browser"
+    assert "._-]" not in USERNAME_PATTERN
+
+    # Both copies have to be the same string, or the form and the API disagree
+    # about what a valid entry is - and only the API gets to say no.
+    frontend = (Path(__file__).resolve().parents[2] / "frontend" / "src" / "utils.ts").read_text(
+        encoding="utf-8"
+    )
+    for name, pattern in (("USERNAME_PATTERN", USERNAME_PATTERN), ("EMAIL_PATTERN", EMAIL_PATTERN)):
+        # TypeScript doubles every backslash inside its string literal.
+        expected = f'export const {name} = "{pattern.replace(chr(92), chr(92) * 2)}";'
+        assert expected in frontend, f"{name} differs between backend and frontend"

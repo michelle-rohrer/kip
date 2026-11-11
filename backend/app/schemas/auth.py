@@ -1,11 +1,31 @@
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from app.models import UserRole
 
+
+def _blank_to_none(value: object) -> object:
+    """An empty string means "not given", not "invalid".
+
+    The form sends "" for an untouched optional field. Without this the API
+    answered a pattern error for a field it calls optional, and the player saw
+    the raw regex with no idea which box it meant.
+    """
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+OptionalEmail = Annotated[str | None, BeforeValidator(_blank_to_none)]
+
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
-USERNAME_PATTERN = r"^[A-Za-z0-9._-]{3,64}$"
+# One character is enough on purpose: this is a 14-person team, not a public
+# sign-up. A player who wants to log in as "l" should not be argued with.
+# The dash is escaped so this stays character-for-character the same string as
+# USERNAME_PATTERN in frontend/src/utils.ts, which a browser needs escaped.
+USERNAME_PATTERN = r"^[A-Za-z0-9._\-]{1,64}$"
 PLAYER_POSITIONS = {
     "setter",
     "outside_hitter",
@@ -17,7 +37,7 @@ PLAYER_POSITIONS = {
 
 class UserCreate(BaseModel):
     username: str = Field(pattern=USERNAME_PATTERN)
-    email: str | None = Field(default=None, pattern=EMAIL_PATTERN)
+    email: OptionalEmail = Field(default=None, pattern=EMAIL_PATTERN)
     password: str = Field(min_length=8, max_length=128)
     role: UserRole
     team_id: int | None = None
@@ -33,7 +53,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str = Field(pattern=USERNAME_PATTERN)
-    email: str | None = Field(default=None, pattern=EMAIL_PATTERN)
+    email: OptionalEmail = Field(default=None, pattern=EMAIL_PATTERN)
     role: UserRole
     team_id: int | None
     training_uid: str | None = None

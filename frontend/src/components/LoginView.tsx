@@ -1,6 +1,7 @@
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import { LANGUAGE_LABELS, Language } from "../i18n";
 import { TeamOption } from "../types";
+import { EMAIL_PATTERN, USERNAME_PATTERN, suggestUsername } from "../utils";
 import { IconMoon, IconShield, IconSparkle, IconSun, IconTrend } from "./icons";
 import { Button, Field, Select, TextInput } from "./ui";
 import { cx } from "./theme";
@@ -52,6 +53,9 @@ export function LoginView({
   onLogin: (event: FormEvent<HTMLFormElement>) => void;
   onRegister: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  // Once she has typed a username of her own, the name field stops overwriting it.
+  const [usernameTouched, setUsernameTouched] = useState(false);
+
   const highlights = [
     { icon: <IconSparkle size={18} />, text: t.heroPoint1 },
     { icon: <IconTrend size={18} />, text: t.heroPoint2 },
@@ -176,19 +180,33 @@ export function LoginView({
                     <Field label={t.name} className="sm:col-span-2">
                       <TextInput
                         value={registerForm.name}
-                        onChange={(event) => onRegisterFormChange({ name: event.target.value })}
+                        onChange={(event) => {
+                          const name = event.target.value;
+                          // Fill the username from the name until she edits it
+                          // herself. The two things the username rejects -
+                          // spaces and umlauts - are the two a name is made of.
+                          onRegisterFormChange(
+                            usernameTouched ? { name } : { name, username: suggestUsername(name) },
+                          );
+                        }}
                         type="text"
                         autoComplete="name"
                         required
                       />
                     </Field>
-                    <Field label={t.username}>
+                    <Field label={t.username} hint={t.usernameHint}>
                       <TextInput
                         value={registerForm.username}
-                        onChange={(event) => onRegisterFormChange({ username: event.target.value })}
+                        onChange={(event) => {
+                          setUsernameTouched(true);
+                          onRegisterFormChange({ username: event.target.value });
+                        }}
                         type="text"
                         autoComplete="username"
                         autoCapitalize="none"
+                        pattern={USERNAME_PATTERN}
+                        title={t.usernameHint}
+                        maxLength={64}
                         required
                       />
                     </Field>
@@ -199,6 +217,10 @@ export function LoginView({
                         type="email"
                         autoComplete="email"
                         autoCapitalize="none"
+                        // type="email" alone accepts "luana@gmx" - the API does
+                        // not, and the player would only find out on submit.
+                        pattern={EMAIL_PATTERN}
+                        title={t.invalidEmail}
                         required
                       />
                     </Field>

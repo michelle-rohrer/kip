@@ -196,11 +196,34 @@ function App() {
       if (error instanceof ApiError) {
         if (error.isNetwork) return t.connectionProblem;
         if (error.status === 401) return t.sessionLoadFailed;
+        // A 422 carries the API's own wording, which is a raw regex. A player
+        // once saw "String should match pattern '^[A-Za-z0-9._-]{1,64}$'" and
+        // had no way to tell that it meant the username box.
+        if (error.status === 422) {
+          if (error.field === "username") return t.invalidUsername;
+          if (error.field === "email") return t.invalidEmail;
+          return t.invalidField;
+        }
+        // These two arrive as English prose in `detail`, with no field to go on.
+        // They are the likeliest 400 on the register form, and short usernames
+        // collide quickly in a squad of fourteen.
+        if (error.status === 400) {
+          if (error.message === "Username already registered") return t.usernameTaken;
+          if (error.message === "Email already registered") return t.emailTaken;
+        }
         return error.message || fallback;
       }
       return error instanceof Error ? error.message : fallback;
     },
-    [t.connectionProblem, t.sessionLoadFailed],
+    [
+      t.connectionProblem,
+      t.sessionLoadFailed,
+      t.invalidUsername,
+      t.invalidEmail,
+      t.invalidField,
+      t.usernameTaken,
+      t.emailTaken,
+    ],
   );
 
   /* ----------------------------------------------------------- app chrome */

@@ -127,3 +127,72 @@ export function computeStreak(dates: string[]): number {
   }
   return streak;
 }
+
+/**
+ * The usernames the API accepts: 1-64 of letters, digits, dot, dash, underscore.
+ *
+ * The backslash before the dash is load-bearing. A browser compiles a `pattern`
+ * attribute with the `v` flag, where a bare `-` at the end of a character class
+ * is a syntax error - and a pattern that fails to compile is ignored in
+ * silence, so the field would accept anything while looking guarded.
+ */
+export const USERNAME_PATTERN = "^[A-Za-z0-9._\\-]{1,64}$";
+
+/**
+ * The addresses the API accepts. Kept in step with EMAIL_PATTERN in
+ * backend/app/schemas/auth.py, and stricter than the browser's own check for
+ * type="email", which happily passes "luana@gmx" and lets the server say no.
+ */
+export const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
+
+export function isValidUsername(value: string): boolean {
+  return new RegExp(USERNAME_PATTERN).test(value);
+}
+
+/**
+ * Turn a display name into a username the API will accept.
+ *
+ * Players typed their full name into the username field and got a raw regex
+ * back ("String should match pattern '^[A-Za-z0-9._-]{1,64}$'") instead of a
+ * sentence. Spaces and umlauts are exactly what a name is full of, so the
+ * field fills itself from the name rather than waiting to reject it.
+ *
+ * Umlauts are spelled out rather than stripped - "mueller" is a name somebody
+ * recognises as hers, "mller" is not.
+ */
+export function suggestUsername(name: string): string {
+  const spelled = name
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss");
+
+  const ascii = spelled
+    // é, à, ç and friends: keep the base letter, drop the accent.
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
+  return ascii
+    .replace(/[^a-z0-9._-]+/g, ".") // spaces and anything else become a dot
+    .replace(/\.{2,}/g, ".") // "von  der  wand" must not become "von..der..wand"
+    .replace(/^[.\-_]+|[.\-_]+$/g, "") // no leading or trailing separator
+    .slice(0, 64);
+}
+
+/**
+ * Does this string survive the compilation a browser puts a `pattern` through?
+ *
+ * A browser wraps the attribute as `^(?:<pattern>)$` and compiles it with the
+ * `v` flag. When that throws, the attribute is dropped without a word and the
+ * input validates everything - which is how "^[A-Za-z0-9._-]{1,64}$" sat on
+ * the username field looking like a guard while accepting "Test Person".
+ */
+export function compilesAsHtmlPattern(pattern: string): boolean {
+  try {
+    new RegExp(`^(?:${pattern})$`, "v");
+    return true;
+  } catch {
+    return false;
+  }
+}
